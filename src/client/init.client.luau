@@ -7,8 +7,28 @@ local StarterGui = game:GetService("StarterGui")
 
 local player = Players.LocalPlayer
 
+-- Wait for framework to be available
+print("[Client] Waiting for framework...")
+local frameworkModule = ReplicatedStorage:WaitForChild("Framework", 10)
+if not frameworkModule then
+	warn("[Client] Framework module not found, using fallback")
+	-- Fallback framework
+	frameworkModule = Instance.new("ModuleScript")
+	frameworkModule.Name = "Framework"
+	frameworkModule.Source = [[
+local Framework = {}
+Framework.Metadata = { Name = "Fallback Framework", Initialized = false }
+Framework.Config = { AutoLoad = true }
+Framework.Storage = { Controllers = {}, Models = {}, Views = {}, Services = {}, Middleware = {}, Libraries = {}, Helpers = {}, Cache = {} }
+function Framework:Initialize() self.Metadata.Initialized = true return self end
+function Framework:Get() return nil end
+return Framework
+]]
+	frameworkModule.Parent = ReplicatedStorage
+end
+
 -- Load the framework
-local Framework = require(ReplicatedStorage.Framework)
+local Framework = require(frameworkModule)
 
 -- Initialize the framework
 local frameworkInstance = Framework:Initialize()

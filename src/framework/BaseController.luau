@@ -11,8 +11,26 @@ BaseController.__index = BaseController
 function BaseController.new()
 	local self = setmetatable({}, BaseController)
 	
-	-- Framework reference
-	self.Framework = require(ReplicatedStorage.Framework)
+	-- Framework reference with fallback
+	local frameworkModule = ReplicatedStorage:FindFirstChild("Framework")
+	if not frameworkModule then
+		warn("[BaseController] Framework module not found, using fallback")
+		-- Create fallback framework
+		frameworkModule = Instance.new("ModuleScript")
+		frameworkModule.Name = "Framework"
+		frameworkModule.Source = [[
+local Framework = {}
+Framework.Metadata = { Name = "Fallback Framework", Initialized = false }
+Framework.Config = { AutoLoad = true }
+Framework.Storage = { Controllers = {}, Models = {}, Views = {}, Services = {}, Middleware = {}, Libraries = {}, Helpers = {}, Cache = {} }
+function Framework:Initialize() self.Metadata.Initialized = true return self end
+function Framework:Get() return nil end
+return Framework
+]]
+		frameworkModule.Parent = ReplicatedStorage
+	end
+	
+	self.Framework = require(frameworkModule)
 	
 	-- Controller properties
 	self.Name = "BaseController"

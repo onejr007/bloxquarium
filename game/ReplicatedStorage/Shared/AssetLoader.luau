@@ -16,7 +16,6 @@ AssetLoader.__index = AssetLoader
 
 -- Cache untuk asset yang sudah di-preload
 local preloadedAssets = {}
-local loadingQueue = {}
 local isPreloading = false
 
 -- Events
@@ -24,35 +23,38 @@ local preloadCompleteEvent = Instance.new("BindableEvent")
 AssetLoader.PreloadComplete = preloadCompleteEvent.Event
 
 -- Fungsi untuk preload asset menggunakan ContentProvider
-local function preloadAsset(asset)
+local function preloadAsset(asset, assetName)
 	if not asset then return false end
 	
 	local success, err = pcall(function()
-		-- Preload semua descendants yang memiliki texture/mesh
 		local assetsToPreload = {}
-		
-		-- Tambahkan asset utama
-		table.insert(assetsToPreload, asset)
-		
-		-- Scan descendants untuk texture dan mesh
-		for _, descendant in pairs(asset:GetDescendants()) do
-			if descendant:IsA("MeshPart") and descendant.MeshId ~= "" then
-				table.insert(assetsToPreload, descendant.MeshId)
-			elseif descendant:IsA("SpecialMesh") and descendant.MeshId ~= "" then
-				table.insert(assetsToPreload, descendant.MeshId)
-			elseif descendant:IsA("Decal") and descendant.Texture ~= "" then
-				table.insert(assetsToPreload, descendant.Texture)
-			elseif descendant:IsA("Texture") and descendant.Texture ~= "" then
-				table.insert(assetsToPreload, descendant.Texture)
-			elseif descendant:IsA("SurfaceGui") then
-				for _, child in pairs(descendant:GetDescendants()) do
-					if child:IsA("ImageLabel") and child.Image ~= "" then
-						table.insert(assetsToPreload, child.Image)
-					elseif child:IsA("ImageButton") and child.Image ~= "" then
-						table.insert(assetsToPreload, child.Image)
+
+		-- Jika asset adalah Instance (Model), scan descendant-nya
+		if typeof(asset) == "Instance" then
+			table.insert(assetsToPreload, asset)
+			for _, descendant in pairs(asset:GetDescendants()) do
+				if descendant:IsA("MeshPart") and descendant.MeshId ~= "" then
+					table.insert(assetsToPreload, descendant.MeshId)
+				elseif descendant:IsA("SpecialMesh") and descendant.MeshId ~= "" then
+					table.insert(assetsToPreload, descendant.MeshId)
+				elseif descendant:IsA("Decal") and descendant.Texture ~= "" then
+					table.insert(assetsToPreload, descendant.Texture)
+				elseif descendant:IsA("Texture") and descendant.Texture ~= "" then
+					table.insert(assetsToPreload, descendant.Texture)
+				elseif descendant:IsA("SurfaceGui") then
+					for _, child in pairs(descendant:GetDescendants()) do
+						if (child:IsA("ImageLabel") or child:IsA("ImageButton")) and child.Image ~= "" then
+							table.insert(assetsToPreload, child.Image)
+						end
 					end
 				end
 			end
+		-- Jika asset adalah string (ID-based asset)
+		elseif typeof(asset) == "string" then
+			table.insert(assetsToPreload, asset)
+		-- Jika asset adalah tabel (misal: sound dengan properti)
+		elseif typeof(asset) == "table" and asset.id then
+			table.insert(assetsToPreload, asset.id)
 		end
 		
 		-- Preload semua asset yang ditemukan
@@ -62,7 +64,7 @@ local function preloadAsset(asset)
 	end)
 	
 	if not success then
-		warn("[AssetLoader] Failed to preload asset:", asset.Name, "Error:", err)
+		warn(string.format("[AssetLoader] Failed to preload asset: %s. Error: %s", tostring(assetName), err))
 		return false
 	end
 	
@@ -86,7 +88,6 @@ function AssetLoader.PreloadAllAssets()
 		local loadedAssets = 0
 		local failedAssets = 0
 		
-		-- Hitung total asset
 		for _ in pairs(allAssets) do
 			totalAssets = totalAssets + 1
 		end
@@ -102,7 +103,7 @@ function AssetLoader.PreloadAllAssets()
 		
 		-- Preload setiap asset
 		for name, asset in pairs(allAssets) do
-			local success = preloadAsset(asset)
+			local success = preloadAsset(asset, name)
 			if success then
 				preloadedAssets[name] = true
 				loadedAssets = loadedAssets + 1
@@ -116,7 +117,7 @@ function AssetLoader.PreloadAllAssets()
 			end
 			
 			-- Yield setiap beberapa asset untuk tidak block thread
-			if (loadedAssets + failedAssets) % 3 == 0 then
+			if (loadedAssets + failedAssets) % 5 == 0 then
 				wait()
 			end
 		end
@@ -155,7 +156,7 @@ function AssetLoader.PreloadAsset(assetName)
 		return true
 	end
 	
-	local success = preloadAsset(asset)
+	local success = preloadAsset(asset, assetName)
 	if success then
 		preloadedAssets[assetName] = true
 		print("[AssetLoader] Successfully preloaded asset:", assetName)
@@ -184,6 +185,12 @@ end
 -- Fungsi untuk mendapatkan clone asset dengan auto-preload
 function AssetLoader.GetAssetClone(assetName, autoPreload)
 	autoPreload = autoPreload ~= false -- Default true
+
+	local asset = AssetRegistry.GetAsset(assetName)
+    if typeof(asset) ~= "Instance" then
+        warn(string.format("[AssetLoader] Cannot clone asset '%s'. It is an ID-based asset or a configuration table. Use GetAsset() instead.", assetName))
+        return nil
+    end
 	
 	-- Preload dulu jika belum
 	if autoPreload and not preloadedAssets[assetName] then
@@ -197,7 +204,7 @@ end
 function AssetLoader.SpawnAsset(assetName, position, parent)
 	local clone = AssetLoader.GetAssetClone(assetName)
 	if not clone then
-		warn("[AssetLoader] Cannot spawn asset - not found:", assetName)
+		warn("[AssetLoader] Cannot spawn asset - asset not found or not a model:", assetName)
 		return nil
 	end
 	
@@ -230,8 +237,10 @@ function AssetLoader.GetPreloadStatus()
 		totalAssets = totalAssets + 1
 	end
 	
-	for _ in pairs(preloadedAssets) do
-		preloadedCount = preloadedCount + 1
+	for name, _ in pairs(preloadedAssets) do
+		if not string.find(name, "_template") then
+		    preloadedCount = preloadedCount + 1
+        end
 	end
 	
 	return {
@@ -250,9 +259,8 @@ end
 
 -- Auto-preload jika di client (untuk performance)
 if RunService:IsClient() then
-	-- Tunggu sebentar setelah game start untuk preload
 	spawn(function()
-		wait(2) -- Tunggu 2 detik untuk memastikan semua asset sudah loaded
+		wait(2) -- Tunggu 2 detik untuk memastikan semua asset sudah ter-register
 		AssetLoader.PreloadAllAssets()
 	end)
 end

@@ -3,31 +3,36 @@
 	
 	Server-side script untuk monitoring dan automatic asset detection
 	Mendeteksi asset baru yang ditambahkan dan memastikan sistem tetap sinkron
+	NOTE: Sebagian besar fungsionalitas dinonaktifkan sementara untuk fokus pada perbaikan error utama.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 -- Import asset system modules
-local AssetManager = require(ReplicatedStorage.Shared.AssetManager)
+-- local AssetManager = require(ReplicatedStorage.Shared.AssetManager)
 
-print("[AssetWatcher] Asset Watcher Server started")
+print("[AssetWatcher] Asset Watcher Server started (Limited Functionality Mode)")
 
 -- Fungsi untuk setup monitoring
 local function setupAssetMonitoring()
-	-- Tunggu sampai Assets folder tersedia
-	local assetsFolder = ReplicatedStorage:WaitForChild("Assets", 30)
+	-- Menggunakan FindFirstChild agar tidak error jika folder tidak ada
+	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
 	if not assetsFolder then
-		error("[AssetWatcher] Assets folder not found!")
+		print("[AssetWatcher] 'Assets' folder not found. Hot-reloading for models is disabled.")
+		return -- Keluar dari fungsi jika folder utama tidak ada
 	end
 	
-	local modelsFolder = assetsFolder:WaitForChild("Models", 30)
+	local modelsFolder = assetsFolder:FindFirstChild("models") -- Menggunakan lowercase untuk konsistensi
 	if not modelsFolder then
-		error("[AssetWatcher] Models folder not found!")
+		print("[AssetWatcher] 'models' folder not found inside 'Assets'. Hot-reloading for models is disabled.")
+		return -- Keluar dari fungsi jika subfolder models tidak ada
 	end
 	
 	print("[AssetWatcher] Monitoring assets folder:", modelsFolder:GetFullName())
 	
+	--[[ NONAKTIF SEMENTARA: Fungsionalitas berikut bergantung pada API AssetManager yang belum lengkap
+
 	-- Monitor untuk asset baru yang ditambahkan
 	modelsFolder.ChildAdded:Connect(function(child)
 		wait(0.5) -- Tunggu sebentar untuk memastikan asset fully loaded
@@ -91,6 +96,7 @@ local function setupAssetMonitoring()
 			end
 		end
 	end)
+	]]
 end
 
 -- Setup monitoring ketika server ready
@@ -99,6 +105,7 @@ spawn(function()
 	setupAssetMonitoring()
 end)
 
+--[[ NONAKTIF SEMENTARA
 -- Event listener untuk preload complete
 AssetManager.PreloadComplete:Connect(function(loaded, total)
 	print(string.format("[AssetWatcher] Preload completed: %d/%d assets loaded", loaded, total))
@@ -108,3 +115,4 @@ end)
 AssetManager.AssetAdded:Connect(function(assetName)
 	print("[AssetWatcher] Asset added event:", assetName)
 end)
+]]

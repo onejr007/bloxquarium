@@ -1,8 +1,9 @@
 --[[
 	AssetRegistry.luau
 	
-	Sistem registry untuk mendeteksi dan mapping semua asset yang ada di folder assets/models
+	Sistem registry untuk mendeteksi dan mapping semua asset yang ada di folder assets/models dan asset_config.luau
 	Menyediakan interface untuk mengakses asset dengan mudah
+	(Cache-busting comment)
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,11 +21,11 @@ local isInitialized = false
 local assetLoadedEvent = Instance.new("BindableEvent")
 AssetRegistry.AssetLoaded = assetLoadedEvent.Event
 
--- Fungsi untuk scan semua asset di folder Models
-local function scanAssets(folder, path)
+-- Fungsi untuk scan semua asset model di folder Models
+local function scanModelAssets(folder, path)
 	path = path or ""
-	
-	-- Get and sort children alphabetically
+	local count = 0
+
 	local children = folder:GetChildren()
 	table.sort(children, function(a, b)
 		return a.Name < b.Name
@@ -34,22 +35,55 @@ local function scanAssets(folder, path)
 		local currentPath = path == "" and child.Name or path .. "/" .. child.Name
 		
 		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then
-			-- Register asset ke cache
-			assetCache[child.Name] = child
-			assetPaths[child.Name] = currentPath
-			
-			-- Clone asset untuk backup (agar original tidak ter-modify)
-			local clonedAsset = child:Clone()
-			clonedAsset.Parent = nil
-			assetCache[child.Name .. "_template"] = clonedAsset
-			
-			print("[AssetRegistry] Registered asset:", child.Name, "at path:", currentPath)
-			
+			if assetCache[child.Name] then
+				warn(string.format("[AssetRegistry] Duplicate asset name '%s'. Skipping registration.", child.Name))
+			else
+				assetCache[child.Name] = child
+				assetPaths[child.Name] = currentPath
+				
+				local clonedAsset = child:Clone()
+				clonedAsset.Parent = nil
+				assetCache[child.Name .. "_template"] = clonedAsset
+				count = count + 1
+			end
 		elseif child:IsA("Folder") then
-			-- Recursive scan untuk folder
-			scanAssets(child, currentPath)
+			count = count + scanModelAssets(child, currentPath)
 		end
 	end
+	return count
+end
+
+-- Fungsi untuk scan semua asset berbasis ID dari file konfigurasi
+local function scanIdBasedAssets()
+	local count = 0
+	local configModule = script.Parent:WaitForChild("AssetConfigData", 5)
+	if not configModule then
+		warn("[AssetRegistry] Could not find 'AssetConfigData.luau'. Skipping ID-based assets.")
+		return 0
+	end
+
+	local success, config = pcall(require, configModule)
+	if not success or typeof(config) ~= "table" then
+		warn("[AssetRegistry] Failed to load or parse AssetConfigData.luau. Error: " .. tostring(config))
+		return 0
+	end
+
+	print("📦 [AssetRegistry] Loading ID-based assets from internal config data...")
+	for category, assets in pairs(config) do
+		if typeof(assets) == "table" then
+			for assetName, assetId in pairs(assets) do
+				if assetCache[assetName] then
+					warn(string.format("[AssetRegistry] Duplicate asset name '%s'. Skipping registration.", assetName))
+				else
+					assetCache[assetName] = assetId
+					assetPaths[assetName] = "AssetConfigData.luau/" .. category
+					count = count + 1
+				end
+			end
+		end
+	end
+
+	return count
 end
 
 -- Fungsi untuk initialize asset registry
@@ -59,58 +93,44 @@ function AssetRegistry.Initialize()
 		return
 	end
 	
-	print("🔍 [AssetRegistry] Initializing comprehensive asset registry...")
-	print("📂 [AssetRegistry] Scanning for available assets...")
+	print("🔍 [AssetRegistry] Initializing... Bypassing file-sync issue.")
 	
-	-- Tunggu sampai Assets folder tersedia
-	local assetsFolder = ReplicatedStorage:WaitForChild("Assets", 10)
-	if not assetsFolder then
-		error("[AssetRegistry] Assets folder not found in ReplicatedStorage!")
-	end
+	local assetsFolder = ReplicatedStorage:FindFirstChild("Assets")
 	
-	local modelsFolder = assetsFolder:WaitForChild("Models", 10)
-	if not modelsFolder then
-		error("[AssetRegistry] Models folder not found in Assets!")
-	end
-	
-	-- Scan semua asset yang ada
 	local startTime = tick()
-	scanAssets(modelsFolder)
-	local scanTime = tick() - startTime
+	local modelAssetCount = 0
 	
-	-- Count actual assets (exclude templates)
-	local assetCount = 0
-	for name, _ in pairs(assetCache) do
-		if not string.find(name, "_template") then
-			assetCount = assetCount + 1
+	if assetsFolder then
+		local modelsFolder = assetsFolder:FindFirstChild("models")
+		if modelsFolder then
+			print("📂 [AssetRegistry] Scanning for model assets...")
+			modelAssetCount = scanModelAssets(modelsFolder)
+		else
+			warn("[AssetRegistry] 'models' sub-folder not found. Skipping model scan.")
 		end
+	else
+		warn("[AssetRegistry] 'Assets' folder not found. Skipping model scan entirely.")
 	end
+
+	local idAssetCount = scanIdBasedAssets()
 	
-	-- Setup listener untuk asset baru yang ditambahkan
-	modelsFolder.ChildAdded:Connect(function(child)
-		wait(0.1) -- Tunggu sebentar untuk memastikan asset fully loaded
-		print("🆕 [AssetRegistry] New asset detected:", child.Name)
-		scanAssets(modelsFolder)
-		assetLoadedEvent:Fire(child.Name)
-	end)
+	local totalAssets = modelAssetCount + idAssetCount
+	local scanTime = tick() - startTime
 	
 	isInitialized = true
 	
-	-- Print comprehensive initialization report
 	print("╔" .. string.rep("═", 50) .. "╗")
 	print("║" .. string.rep(" ", 10) .. "🔍 ASSET REGISTRY INITIALIZED 🔍" .. string.rep(" ", 7) .. "║")
 	print("║" .. string.rep(" ", 50) .. "║")
-	print(string.format("║  📦 Assets discovered: %d" .. string.rep(" ", 50 - 23 - string.len(tostring(assetCount))) .. "║", assetCount))
+	print(string.format("║  📦 Total assets discovered: %d", totalAssets) .. string.rep(" ", 50 - 29 - string.len(tostring(totalAssets))) .. "║")
+	print(string.format("║    - Models: %d", modelAssetCount) .. string.rep(" ", 50 - 16 - string.len(tostring(modelAssetCount))) .. "║")
+	print(string.format("║    - ID-Based: %d", idAssetCount) .. string.rep(" ", 50 - 18 - string.len(tostring(idAssetCount))) .. "║")
 	print(string.format("║  ⏱️  Scan time: %.3f seconds" .. string.rep(" ", 50 - 22 - string.len(string.format("%.3f", scanTime))) .. "║", scanTime))
-	print("║  🔄 Hot-reload monitoring: ACTIVE" .. string.rep(" ", 15) .. "║")
 	print("╚" .. string.rep("═", 50) .. "╝")
 end
 
--- Fungsi untuk mendapatkan asset berdasarkan nama
 function AssetRegistry.GetAsset(assetName)
-	if not isInitialized then
-		AssetRegistry.Initialize()
-	end
+	if not isInitialized then AssetRegistry.Initialize() end
 	
 	local asset = assetCache[assetName]
 	if not asset then
@@ -121,10 +141,13 @@ function AssetRegistry.GetAsset(assetName)
 	return asset
 end
 
--- Fungsi untuk mendapatkan clone dari asset (untuk digunakan di game)
 function AssetRegistry.GetAssetClone(assetName)
-	if not isInitialized then
-		AssetRegistry.Initialize()
+	if not isInitialized then AssetRegistry.Initialize() end
+
+	local asset = assetCache[assetName]
+	if typeof(asset) ~= "Instance" then
+		warn(string.format("[AssetRegistry] Cannot clone asset '%s'. Not a model.", assetName))
+		return nil
 	end
 	
 	local template = assetCache[assetName .. "_template"]
@@ -136,11 +159,8 @@ function AssetRegistry.GetAssetClone(assetName)
 	return template:Clone()
 end
 
--- Fungsi untuk mendapatkan semua asset yang tersedia
 function AssetRegistry.GetAllAssets()
-	if not isInitialized then
-		AssetRegistry.Initialize()
-	end
+	if not isInitialized then AssetRegistry.Initialize() end
 	
 	local assets = {}
 	for name, asset in pairs(assetCache) do
@@ -152,48 +172,33 @@ function AssetRegistry.GetAllAssets()
 	return assets
 end
 
--- Fungsi untuk mendapatkan path dari asset
 function AssetRegistry.GetAssetPath(assetName)
-	if not isInitialized then
-		AssetRegistry.Initialize()
-	end
+	if not isInitialized then AssetRegistry.Initialize() end
 	
 	return assetPaths[assetName]
 end
 
--- Fungsi untuk check apakah asset exists
 function AssetRegistry.HasAsset(assetName)
-	if not isInitialized then
-		AssetRegistry.Initialize()
-	end
+	if not isInitialized then AssetRegistry.Initialize() end
 	
 	return assetCache[assetName] ~= nil
 end
 
--- Fungsi untuk pre-load semua asset (untuk performance)
-function AssetRegistry.PreloadAllAssets()
-	if not isInitialized then
-		AssetRegistry.Initialize()
-	end
-	
-	print("[AssetRegistry] Pre-loading all assets...")
-	
-	local loadedCount = 0
-	for name, asset in pairs(assetCache) do
+-- PERBAIKAN: Menambahkan fungsi GetAssetCount yang hilang
+function AssetRegistry.GetAssetCount()
+	if not isInitialized then AssetRegistry.Initialize() end
+
+	local count = 0
+	for name, _ in pairs(assetCache) do
+		-- Jangan hitung template sebagai asset unik
 		if not string.find(name, "_template") then
-			-- Pre-load asset dengan membuat clone dan destroy
-			local clone = AssetRegistry.GetAssetClone(name)
-			if clone then
-				clone:Destroy()
-				loadedCount = loadedCount + 1
-			end
+			count = count + 1
 		end
 	end
-	
-	print("[AssetRegistry] Pre-loaded", loadedCount, "assets")
+	return count
 end
 
--- Auto-initialize jika di server atau client
+-- Auto-initialize saat script pertama kali di-require
 if RunService:IsServer() or RunService:IsClient() then
 	AssetRegistry.Initialize()
 end

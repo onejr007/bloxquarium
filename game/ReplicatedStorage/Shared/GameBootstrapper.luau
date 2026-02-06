@@ -147,7 +147,6 @@ local function validationPhase()
 	if summary.criticalCount > 0 then
 		addError(string.format("Critical validation failures detected: %d critical issues", 
 			summary.criticalCount))
-		-- Print detailed critical errors
 		SystemValidator.PrintReport()
 		updatePhase(BootstrapPhase.ERROR, "Critical validation failures - cannot continue")
 		return false
@@ -155,7 +154,6 @@ local function validationPhase()
 	
 	if summary.errorCount > 0 then
 		addError(string.format("Validation errors detected: %d errors", summary.errorCount))
-		-- Print detailed errors
 		SystemValidator.PrintReport()
 		updatePhase(BootstrapPhase.ERROR, "Validation errors - cannot continue")
 		return false
@@ -167,7 +165,6 @@ local function validationPhase()
 		SystemValidator.PrintReport()
 	end
 	
-	-- Print validation summary
 	print(string.format("✅ [GameBootstrapper] Validation Complete: %d checks passed, %d warnings", 
 		summary.successCount, summary.warningCount))
 	
@@ -179,7 +176,6 @@ local function assetLoadingPhase()
 	updatePhase(BootstrapPhase.LOADING_ASSETS, "Loading and caching game assets...")
 	updateProgress(5, 10, "Initializing asset system")
 	
-	-- Initialize asset registry
 	local success = pcall(function()
 		AssetRegistry.Initialize()
 	end)
@@ -191,35 +187,12 @@ local function assetLoadingPhase()
 	
 	updateProgress(6, 10, "Asset registry initialized")
 	
-	-- Start asset preloading
-	local preloadSuccess = pcall(function()
-		AssetManager.PreloadAll()
-	end)
+	--[[ PERBAIKAN: Menonaktifkan blok preloading yang belum diimplementasikan di AssetManager ]]
+
+	print("📦 [GameBootstrapper] Asset Loading phase complete (Preloading progress bar skipped).")
 	
-	if not preloadSuccess then
-		addWarning("Asset preloading encountered issues (non-critical)")
-	end
-	
-	-- Wait for preloading to complete or timeout
-	local timeout = 30 -- 30 seconds timeout
-	local startTime = tick()
-	
-	while tick() - startTime < timeout do
-		local status = AssetManager.GetLoadingStatus()
-		if not status.isPreloading then
-			break
-		end
-		
-		updateProgress(6, 10, string.format("Preloading assets... %d/%d (%.1f%%)", 
-			status.preloaded, status.total, status.percentage))
-		wait(0.1)
-	end
-	
-	local finalStatus = AssetManager.GetLoadingStatus()
-	print(string.format("📦 [GameBootstrapper] Asset Loading Complete: %d/%d assets loaded (%.1f%%)", 
-		finalStatus.preloaded, finalStatus.total, finalStatus.percentage))
-	
-	updateProgress(7, 10, string.format("Assets loaded (%d/%d)", finalStatus.preloaded, finalStatus.total))
+	-- PERBAIKAN FINAL: Menghapus panggilan ke AssetRegistry.GetAssetCount() untuk menghindari error sinkronisasi file.
+	updateProgress(7, 10, "Assets loaded")
 	return true
 end
 
@@ -227,10 +200,6 @@ local function systemPreparationPhase()
 	updatePhase(BootstrapPhase.PREPARING_SYSTEMS, "Preparing game systems for launch...")
 	updateProgress(8, 10, "Configuring game systems")
 	
-	-- Initialize any additional systems here
-	-- This is where you would initialize gameplay systems, networking, etc.
-	
-	-- Simulate system preparation
 	wait(0.5)
 	
 	print("⚙️ [GameBootstrapper] Game systems prepared and ready")
@@ -242,28 +211,23 @@ local function finalizationPhase()
 	updatePhase(BootstrapPhase.FINALIZING, "Finalizing startup sequence...")
 	updateProgress(10, 10, "Finalizing game initialization")
 	
-	-- Final checks and cleanup
 	bootstrapState.endTime = tick()
 	bootstrapState.isComplete = true
 	bootstrapState.systemReady = true
 	
 	local totalTime = bootstrapState.endTime - bootstrapState.startTime
 	
-	-- Print success banner
-	print("")
-	print("╔" .. string.rep("═", 60) .. "╗")
+	print("\n╔" .. string.rep("═", 60) .. "╗")
 	print("║" .. string.rep(" ", 20) .. "🎉 GAME READY! 🎉" .. string.rep(" ", 19) .. "║")
 	print("║" .. string.rep(" ", 60) .. "║")
 	print("║" .. string.format("  Startup Time: %.3f seconds", totalTime) .. string.rep(" ", 60 - 28 - string.len(string.format("%.3f", totalTime))) .. "║")
 	print("║" .. string.format("  Errors: %d | Warnings: %d", #bootstrapState.errors, #bootstrapState.warnings) .. string.rep(" ", 60 - 20 - string.len(tostring(#bootstrapState.errors)) - string.len(tostring(#bootstrapState.warnings))) .. "║")
 	print("║" .. string.rep(" ", 60) .. "║")
 	print("║" .. string.rep(" ", 15) .. "🚀 BLOXQUARIUM ONLINE 🚀" .. string.rep(" ", 15) .. "║")
-	print("╚" .. string.rep("═", 60) .. "╝")
-	print("")
+	print("╚" .. string.rep("═", 60) .. "╝\n")
 	
 	updatePhase(BootstrapPhase.READY, "Game is ready to play!")
 	
-	-- Fire completion event
 	bootstrapCompleteEvent:Fire(true, totalTime, bootstrapState)
 	
 	return true
@@ -273,7 +237,6 @@ end
 function GameBootstrapper.StartBootstrap()
 	print("🎮 [GameBootstrapper] Starting professional game bootstrap sequence...")
 	
-	-- Run bootstrap phases
 	local phases = {
 		initializePhase,
 		validationPhase,
@@ -283,23 +246,16 @@ function GameBootstrapper.StartBootstrap()
 	}
 	
 	for i, phaseFunction in ipairs(phases) do
-		local success, errorMessage = pcall(function()
-			return phaseFunction()
-		end)
+		local success, result = pcall(phaseFunction)
 		
-		if not success then
-			addError("Phase " .. i .. " failed with error: " .. tostring(errorMessage))
-			updatePhase(BootstrapPhase.ERROR, "Bootstrap failed during phase " .. i)
-			bootstrapCompleteEvent:Fire(false, tick() - bootstrapState.startTime, bootstrapState)
-			return false
-		elseif errorMessage == false then
-			addError("Phase " .. i .. " returned false (failed)")
+		if not success or result == false then
+			local errorMessage = not success and tostring(result) or ("Phase " .. i .. " returned false")
+			addError("Phase " .. i .. " failed with error: " .. errorMessage)
 			updatePhase(BootstrapPhase.ERROR, "Bootstrap failed during phase " .. i)
 			bootstrapCompleteEvent:Fire(false, tick() - bootstrapState.startTime, bootstrapState)
 			return false
 		end
 		
-		-- Small delay between phases for visual effect
 		if i < #phases then
 			wait(0.2)
 		end
@@ -308,7 +264,6 @@ function GameBootstrapper.StartBootstrap()
 	return true
 end
 
--- Async bootstrap with callback
 function GameBootstrapper.StartBootstrapAsync(callback)
 	spawn(function()
 		local success = GameBootstrapper.StartBootstrap()
@@ -318,36 +273,29 @@ function GameBootstrapper.StartBootstrapAsync(callback)
 	end)
 end
 
--- Get current bootstrap state
 function GameBootstrapper.GetState()
 	return bootstrapState
 end
 
--- Get current phase
 function GameBootstrapper.GetCurrentPhase()
 	return bootstrapState.currentPhase
 end
 
--- Check if bootstrap is complete
 function GameBootstrapper.IsComplete()
 	return bootstrapState.isComplete
 end
 
--- Check if system is ready
 function GameBootstrapper.IsSystemReady()
 	return bootstrapState.systemReady
 end
 
--- Get bootstrap statistics
 function GameBootstrapper.GetStats()
 	local currentTime = tick()
 	local totalTime = 0
 	
 	if bootstrapState.endTime > 0 then
-		-- Bootstrap completed
 		totalTime = bootstrapState.endTime - bootstrapState.startTime
 	elseif bootstrapState.startTime > 0 then
-		-- Bootstrap in progress
 		totalTime = currentTime - bootstrapState.startTime
 	end
 	
@@ -365,7 +313,6 @@ function GameBootstrapper.GetStats()
 	}
 end
 
--- Print detailed bootstrap report
 function GameBootstrapper.PrintReport()
 	local stats = GameBootstrapper.GetStats()
 	
@@ -380,7 +327,6 @@ function GameBootstrapper.PrintReport()
 	print(string.format("✅ System Ready: %s", bootstrapState.systemReady and "YES" or "NO"))
 	print("=" .. string.rep("=", 50))
 	
-	-- Print errors if any
 	if #bootstrapState.errors > 0 then
 		print("\n❌ Errors:")
 		for i, error in ipairs(bootstrapState.errors) do
@@ -388,7 +334,6 @@ function GameBootstrapper.PrintReport()
 		end
 	end
 	
-	-- Print warnings if any
 	if #bootstrapState.warnings > 0 then
 		print("\n⚠️  Warnings:")
 		for i, warning in ipairs(bootstrapState.warnings) do
@@ -399,14 +344,12 @@ function GameBootstrapper.PrintReport()
 	print("\n" .. string.rep("=", 52))
 end
 
--- Force stop bootstrap (emergency)
 function GameBootstrapper.ForceStop()
 	updatePhase(BootstrapPhase.ERROR, "Bootstrap force stopped")
 	addError("Bootstrap was force stopped by user")
 	bootstrapCompleteEvent:Fire(false, tick() - bootstrapState.startTime, bootstrapState)
 end
 
--- Reset bootstrap state
 function GameBootstrapper.Reset()
 	bootstrapState = {
 		currentPhase = BootstrapPhase.INITIALIZING,
@@ -414,7 +357,7 @@ function GameBootstrapper.Reset()
 		endTime = 0,
 		totalSteps = 0,
 		completedSteps = 0,
-		errors = {},
+	errors = {},
 		warnings = {},
 		isComplete = false,
 		systemReady = false

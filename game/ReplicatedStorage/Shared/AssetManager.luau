@@ -1,140 +1,111 @@
 --[[
 	AssetManager.luau
 	
-	API Interface utama untuk developer mengakses asset system
-	Menyediakan interface yang mudah dan intuitif untuk menggunakan asset
+	Satu-satunya interface yang dibutuhkan developer untuk berinteraksi dengan semua jenis aset.
+	Menyediakan API yang sistematis, mudah digunakan, dan memiliki caching cerdas.
 ]]
 
-local AssetRegistry = require(script.Parent.AssetRegistry)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AssetLoader = require(script.Parent.AssetLoader)
-local AssetErrorHandler = require(script.Parent.AssetErrorHandler)
 
 local AssetManager = {}
 
--- Fungsi utama untuk mendapatkan asset (reference ke original)
-function AssetManager.Get(assetName)
-	return AssetLoader.GetAsset(assetName)
+-- Cache untuk aset yang sudah diproses (misalnya, objek Sound yang sudah dibuat)
+local processedAssetCache = {}
+
+--[[
+	Fungsi utama untuk mendapatkan aset apa pun.
+	Secara cerdas menentukan tindakan yang benar berdasarkan jenis aset.
+
+	@param assetName Nama aset yang akan didapatkan.
+	@return Beragam, tergantung pada jenis aset:
+		- Instance (Model/Part): Mengembalikan clone dari model.
+		- string (Image/Decal ID): Mengembalikan asset ID.
+		- Sound (dari config): Mengembalikan objek Sound yang telah di-cache dan siap digunakan.
+]]
+function AssetManager.get(assetName)
+	local asset = AssetLoader.GetAsset(assetName, true) -- true untuk auto-preload
+
+	if not asset then
+		warn(string.format("[AssetManager] Aset '%s' tidak ditemukan!", assetName))
+		return nil
+	end
+
+	local assetType = typeof(asset)
+
+	-- 1. Jika aset adalah sebuah Instance (Model, Part)
+	if assetType == "Instance" then
+		return asset:Clone()
+	end
+
+	-- 2. Jika aset adalah sebuah string (Image ID, Decal ID)
+	if assetType == "string" then
+		return asset
+	end
+
+	-- 3. Jika aset adalah sebuah tabel (Sound dari config)
+	if assetType == "table" and asset.id then
+		-- Cek apakah objek Sound sudah ada di cache
+		if processedAssetCache[assetName] then
+			return processedAssetCache[assetName]
+		end
+
+		-- Jika tidak, buat objek Sound, konfigurasikan, dan simpan di cache
+		print(string.format("[AssetManager] Membuat dan caching objek Sound untuk '%s'", assetName))
+		local sound = Instance.new("Sound")
+		sound.Name = assetName
+		sound.SoundId = asset.id
+		sound.Volume = asset.volume or 1
+		sound.Looped = asset.looped or false
+		
+		processedAssetCache[assetName] = sound
+		return sound
+	end
+
+	warn(string.format("[AssetManager] Jenis aset tidak dikenal untuk '%s'", assetName))
+	return asset
 end
 
--- Fungsi untuk mendapatkan clone asset (untuk digunakan di game)
-function AssetManager.Clone(assetName)
-	return AssetLoader.GetAssetClone(assetName)
+--[[
+	Secara spesifik mendapatkan clone dari sebuah aset. Sangat berguna untuk suara
+	yang perlu dimainkan secara bersamaan (overlapping).
+
+	@param assetName Nama aset yang akan di-clone.
+	@return Clone dari aset yang diminta.
+]]
+function AssetManager.getClone(assetName)
+	local asset = AssetManager.get(assetName)
+	if not asset then return nil end
+
+	if typeof(asset) == "Instance" or typeof(asset) == "Sound" then
+		return asset:Clone()
+	else
+		-- Aset seperti ID gambar (string) tidak bisa di-clone, jadi kembalikan saja nilainya
+		return asset
+	end
 end
 
--- Fungsi untuk spawn asset langsung ke workspace
-function AssetManager.Spawn(assetName, position, parent)
-	return AssetLoader.SpawnAsset(assetName, position, parent)
-end
+--[[
+	Shortcut untuk men-spawn model ke dalam workspace (atau parent lain) dengan posisi tertentu.
 
--- Fungsi untuk check apakah asset exists
-function AssetManager.Exists(assetName)
-	return AssetRegistry.HasAsset(assetName)
-end
+	@param assetName Nama model yang akan di-spawn.
+	@param position Vector3 opsional untuk posisi spawn.
+	@param parent Instance opsional sebagai parent dari model.
+]]
+function AssetManager.spawn(assetName, position, parent)
+	local model = AssetManager.get(assetName)
 
--- Fungsi untuk mendapatkan semua asset yang tersedia
-function AssetManager.GetAll()
-	return AssetRegistry.GetAllAssets()
-end
+	if not (model and model:IsA("Model")) then
+		warn(string.format("[AssetManager] Tidak bisa spawn '%s', karena bukan sebuah Model.", assetName))
+		return nil
+	end
 
--- Fungsi untuk mendapatkan list nama asset
-function AssetManager.GetAssetNames()
-	local assets = AssetRegistry.GetAllAssets()
-	local names = {}
-	
-	for name in pairs(assets) do
-		table.insert(names, name)
+	model.Parent = parent or workspace
+	if position and model.PrimaryPart then
+		model:SetPrimaryPartCFrame(CFrame.new(position))
 	end
 	
-	return names
-end
-
--- Fungsi untuk preload asset tertentu
-function AssetManager.Preload(assetName)
-	return AssetLoader.PreloadAsset(assetName)
-end
-
--- Fungsi untuk preload semua asset
-function AssetManager.PreloadAll()
-	AssetLoader.PreloadAllAssets()
-end
-
--- Fungsi untuk check status preloading
-function AssetManager.GetLoadingStatus()
-	return AssetLoader.GetPreloadStatus()
-end
-
--- Fungsi untuk check apakah asset sudah di-preload
-function AssetManager.IsLoaded(assetName)
-	return AssetLoader.IsPreloaded(assetName)
-end
-
--- Event untuk notifikasi ketika asset baru ditambahkan
-AssetManager.AssetAdded = AssetRegistry.AssetLoaded
-
--- Event untuk notifikasi ketika preloading selesai
-AssetManager.PreloadComplete = AssetLoader.PreloadComplete
-
--- Fungsi utility untuk debugging
-function AssetManager.Debug()
-	local status = AssetLoader.GetPreloadStatus()
-	local allAssets = AssetRegistry.GetAllAssets()
-	
-	print("=== Asset Manager Debug Info ===")
-	print("Total Assets:", status.total)
-	print("Preloaded Assets:", status.preloaded)
-	print("Preload Percentage:", string.format("%.1f%%", status.percentage))
-	print("Currently Preloading:", status.isPreloading)
-	print("\nAsset List:")
-	
-	for name, asset in pairs(allAssets) do
-		local isPreloaded = AssetLoader.IsPreloaded(name)
-		local path = AssetRegistry.GetAssetPath(name)
-		print(string.format("  %s [%s] - %s", name, isPreloaded and "LOADED" or "NOT LOADED", path or "unknown path"))
-	end
-	
-	print("================================")
-end
-
--- Safe versions dengan error handling
-function AssetManager.SafeGet(assetName, fallbackAsset)
-	return AssetErrorHandler.SafeGetAsset(assetName, fallbackAsset)
-end
-
-function AssetManager.SafeClone(assetName, fallbackAsset)
-	return AssetErrorHandler.SafeCloneAsset(assetName, fallbackAsset)
-end
-
-function AssetManager.SafeSpawn(assetName, position, parent, fallbackAsset)
-	return AssetErrorHandler.SafeSpawnAsset(assetName, position, parent, fallbackAsset)
-end
-
--- Error handling functions
-function AssetManager.GetErrorLog()
-	return AssetErrorHandler.GetErrorLog()
-end
-
-function AssetManager.GetErrorStats()
-	return AssetErrorHandler.GetErrorStats()
-end
-
-function AssetManager.GetHealthStatus()
-	return AssetErrorHandler.HealthCheck()
-end
-
-function AssetManager.CreateFallback(name, size, color)
-	return AssetErrorHandler.CreateFallbackAsset(name, size, color)
-end
-
--- Event untuk error notifications
-AssetManager.ErrorOccurred = AssetErrorHandler.ErrorOccurred
-
--- Fungsi untuk clear cache (debugging)
-function AssetManager.ClearCache()
-	AssetLoader.ClearCache()
-end
-
-function AssetManager.ClearErrorLog()
-	AssetErrorHandler.ClearErrorLog()
+	return model
 end
 
 return AssetManager

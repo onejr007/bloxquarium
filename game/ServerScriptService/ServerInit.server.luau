@@ -9,14 +9,22 @@
 
 print("🚀 [Server] Starting Bloxquarium Professional Game Engine...")
 
--- Import GameBootstrapper
+-- Import modul utama
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameBootstrapper"))
+
+-- PERBAIKAN: Me-require DataService yang baru
+local DataService = require(ServerScriptService:WaitForChild("DataService"))
 
 -- Start professional bootstrap sequence
 GameBootstrapper.StartBootstrapAsync(function(success, state)
 	if success then
 		print("✅ [Server] Game bootstrap completed successfully!")
+		
+		-- PERBAIKAN: Menginisialisasi DataService setelah bootstrap berhasil
+		DataService:Init()
+
 		print("🎮 [Server] Bloxquarium is now ready for players!")
 		
 		-- Optional: Run demo setelah bootstrap selesai

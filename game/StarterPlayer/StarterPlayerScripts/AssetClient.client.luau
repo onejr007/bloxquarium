@@ -3,6 +3,7 @@
 	
 	Client-side script untuk asset management dan preloading
 	Menangani preloading asset untuk performance optimization
+	NOTE: Fungsionalitas preloading dinonaktifkan sementara karena API belum lengkap.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,18 +18,20 @@ print("[AssetClient] Asset Client started for player:", player.Name)
 
 -- Fungsi untuk setup client-side asset management
 local function setupClientAssets()
-	print("[AssetClient] Setting up client asset management...")
+	print("[AssetClient] Setting up client asset management (Limited Functionality Mode).")
 	
+	--[[ NONAKTIF SEMENTARA: Fungsionalitas berikut bergantung pada API AssetManager yang belum lengkap
+
 	-- Auto-preload semua asset ketika client ready
 	spawn(function()
 		wait(3) -- Tunggu client fully loaded
 		
 		print("[AssetClient] Starting automatic asset preloading...")
-		AssetManager.PreloadAll()
+		AssetManager.PreloadAll() -- MENYEBABKAN ERROR
 	end)
 	
 	-- Event listener untuk preload complete
-	AssetManager.PreloadComplete:Connect(function(loaded, total)
+	AssetManager.PreloadComplete:Connect(function(loaded, total) -- MENYEBABKAN ERROR
 		print(string.format("[AssetClient] Client preload completed: %d/%d assets loaded", loaded, total))
 		
 		-- Tampilkan debug info setelah preload selesai
@@ -67,6 +70,7 @@ local function setupClientAssets()
 			end
 		end
 	end)
+	]]
 end
 
 -- Setup client assets ketika ready

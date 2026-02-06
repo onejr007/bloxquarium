@@ -1,5 +1,5 @@
 --[[
-    Promise.luau
+    Promise.luau (v1.1 - Menambahkan Promise.all)
 
     Implementasi library Promise yang ringan, terinspirasi dari Promise/A+.
     Memungkinkan penanganan operasi asynchronous yang lebih bersih dan terstruktur.
@@ -17,7 +17,7 @@ local STATUS = {
     REJECTED = "Rejected",
 }
 
--- Fungsi utilitas untuk memanggil callback secara aman (NAMA DIPERBAIKI)
+-- Fungsi utilitas untuk memanggil callback secara aman
 local function tryCall(callback, ...)
     return pcall(callback, ...)
 end
@@ -71,7 +71,6 @@ end
 function Promise:andThen(onResolved)
     return Promise.new(function(resolve, reject)
         local function newCallback(value)
-            -- Memanggil fungsi dengan nama yang sudah diperbaiki
             local success, result = tryCall(onResolved, value)
             if success then
                 resolve(result)
@@ -92,7 +91,6 @@ end
 function Promise:catch(onRejected)
     return Promise.new(function(resolve, reject)
         local function newCallback(reason)
-            -- Memanggil fungsi dengan nama yang sudah diperbaiki
             local success, result = tryCall(onRejected, reason)
             if success then
                 resolve(result)
@@ -120,6 +118,35 @@ end
 function Promise.reject(reason)
     return Promise.new(function(_, reject)
         reject(reason)
+    end)
+end
+
+-- [BARU] Fungsi statis untuk menangani beberapa promise sekaligus
+function Promise.all(promises)
+    return Promise.new(function(resolve, reject)
+        local results = {}
+        local promisesCompleted = 0
+        local totalPromises = #promises
+
+        if totalPromises == 0 then
+            resolve({})
+            return
+        end
+
+        for i, promise in ipairs(promises) do
+            promise
+                :andThen(function(result)
+                    results[i] = result
+                    promisesCompleted = promisesCompleted + 1
+                    if promisesCompleted == totalPromises then
+                        resolve(results)
+                    end
+                end)
+                :catch(function(reason)
+                    -- Jika salah satu promise gagal, maka Promise.all() juga gagal
+                    reject(reason)
+                end)
+        end
     end)
 end
 

@@ -13,7 +13,7 @@
 
     Jangan pernah meng-commit file ini ke repositori Git publik atau membagikannya.
     File ini HANYA untuk kenyamanan pengujian di Roblox Studio. Di server
-    game yang sudah di-publish, kunci API akan diambil dengan aman dari SecretService.
+    game yang sudah di-publish, kunci akan diambil dengan aman dari SecretService.
 
 ]]
 
@@ -21,18 +21,19 @@ local Config = {}
 
 -- Konfigurasi untuk lingkungan pengembangan (Roblox Studio)
 Config.Studio = {
-    -- Tempelkan URL Firebase Anda di sini untuk pengujian lokal
+    -- URL Realtime Database Firebase Anda
     FIREBASE_URL = "https://bloxaquarium-default-rtdb.asia-southeast1.firebasedatabase.app/",
     
-    -- Tempelkan Kunci API Web Firebase Anda di sini untuk pengujian lokal
-    FIREBASE_API_KEY = "OVIURisf0NwJpGjooxUEVos4tcYyLiFHCjAwziGS"
+    -- [PENTING] Ini adalah **DATABASE SECRET**, bukan API Key.
+    -- Diperlukan untuk otentikasi server legacy.
+    FIREBASE_SECRET = "OVIURisf0NwJpGjooxUEVos4tcYyLiFHCjAwziGS"
 }
 
 -- Konfigurasi untuk lingkungan produksi (Server Roblox Live)
 -- Nama-nama ini harus cocok dengan nama secret yang Anda buat di Creator Dashboard.
 Config.Production = {
     FIREBASE_URL_SECRET_NAME = "FIREBASE_URL",
-    FIREBASE_API_KEY_SECRET_NAME = "FIREBASE_API_KEY"
+    FIREBASE_SECRET_NAME = "FIREBASE_SECRET" -- Nama secret untuk Database Secret Anda
 }
 
 return Config

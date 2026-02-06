@@ -1,5 +1,5 @@
 --[[
-	init.server.luau (v1.2 - Simplified Init Flow)
+	init.server.luau (v1.4 - Race Condition Fix)
 	
 	🎮 BLOXQUARIUM SERVER ENTRY POINT 🎮
 	
@@ -17,29 +17,47 @@ local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitFo
 -- Import Layanan Inti Server
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
 local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
+local GameActions = require(ServerScriptService:WaitForChild("GameActions")) -- Import modul aksi
+local LeaderboardService = require(ServerScriptService:WaitForChild("LeaderboardService")) -- Memuat layanan leaderboard
 
--- Inisialisasi Saluran Komunikasi PENTING di Awal
--- 1. Inisialisasi RemoteService untuk komunikasi aman client-server.
+-- =======================================================================
+-- URUTAN INISIALISASI KRITIS
+-- =======================================================================
+
+-- Langkah 1: Inisialisasi RemoteService untuk komunikasi aman client-server.
 RemoteService:Init()
 
--- 2. Buat RemoteEvent untuk sinkronisasi state klien.
+-- Langkah 2: Daftarkan semua Aksi Game. Ini harus terjadi sebelum DataService diinisialisasi
+-- jika ada aksi yang perlu dipanggil saat pemain bergabung.
+print("🛡️ [Server] Mendaftarkan Aksi Game yang Aman...")
+RemoteService:Register("GameAction_BuyItem", function(player, itemId)
+    return GameActions:BuyItem(player, itemId)
+end)
+print("   -> 'GameAction_BuyItem' terdaftar.")
+
+
+-- Langkah 3: Buat RemoteEvent untuk sinkronisasi state klien.
 print("🎨 [Server] Membuat ClientStateChannel...")
 local clientStateChannel = Instance.new("RemoteEvent")
 clientStateChannel.Name = "ClientStateChannel"
 clientStateChannel.Parent = ReplicatedStorage
 
--- Start professional bootstrap sequence
+-- Langkah 4 (FIX): Inisialisasi DataService SEKARANG. Ini sangat penting.
+-- Dengan menginisialisasi DataService di sini, kita memastikan bahwa listener 'PlayerAdded'
+-- sudah aktif dan siap untuk menangani pemain yang bergabung, bahkan saat sisa
+-- dari permainan (seperti aset dan sistem lainnya) masih dimuat oleh GameBootstrapper.
+-- Ini menyelesaikan race condition di mana pemain bergabung sebelum DataService siap.
+DataService:Init()
+
+-- =======================================================================
+-- INISIALISASI GAME UMUM
+-- =======================================================================
+
+-- Sekarang kita dapat dengan aman memulai sisa urutan bootstrap game.
 GameBootstrapper.StartBootstrapAsync(function(success, state)
 	if success then
 		print("✅ [Server] Game bootstrap completed successfully!")
-		
-		-- Inisialisasi layanan inti di dalam bootstrap.
-        -- Init harus dipanggil SETELAH semua channel komunikasi dibuat.
-        DataService:Init()
-
-        -- Event 'PlayerReady' tidak diperlukan lagi. Alur data sekarang ditangani
-        -- secara otomatis oleh DataService -> ClientStateChannel.
-
+        -- DataService:Init() telah dipindahkan ke atas.
 		print("🎮 [Server] Bloxquarium is now ready for players!")
 		
 	else

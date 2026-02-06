@@ -1,14 +1,14 @@
 --[[
-    DataService.luau (v3.2 - Firebase Priority)
+    DataService.luau (v5.1 - State Update Signal)
 
-    Layanan data terpusat, di-refactor dengan 5 pilar modern scripting:
+    Layanan data terpusat dengan arsitektur staging:
     1. Optimasi: Menggunakan pustaka `task` untuk penjadwalan.
     2. Advanced Scripting: Arsitektur berbasis Promise untuk operasi async.
     3. Memory Management: Pembersihan cache yang jelas saat pemain keluar.
-    4. Security: Mengambil kunci API dari SecretService di server live, 
-       dan dari Config.luau lokal di Studio (Hybrid Approach).
-    5. Network Efficiency: Menggunakan cache sesi, memprioritaskan Firebase
-       untuk awal/akhir sesi dan DataStore untuk auto-save.
+    4. Security: Mengambil kunci API dari SecretService di server live.
+    5. Network Efficiency: Firebase sebagai penyimpanan permanen, DataStore sebagai
+       'cache' server-side yang kuat untuk sesi game aktif.
+    6. NEW (v5.1): Menambahkan sinyal 'StateUpdated' untuk sinkronisasi server-ke-server.
 ]]
 
 --=================[ SERVICES ]=================--
@@ -26,6 +26,17 @@ local Config = require(script.Parent.Config)
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataV1")
 local DataService = {}
 
+-- Sinyal untuk memberitahu modul server lain tentang pembaruan state
+DataService.StateUpdated = {}
+function DataService.StateUpdated:Connect(callback)
+    table.insert(self, callback)
+end
+function DataService.StateUpdated:Fire(...)
+    for _, callback in ipairs(self) do
+        task.spawn(callback, ...)
+    end
+end
+
 local playerSessionData = {}
 
 --///////////////////////////////////////////////////////////////////////////
@@ -36,168 +47,214 @@ local function getFirebaseSecrets()
     if RunService:IsStudio() then
         local studioConfig = Config.Studio
         if not studioConfig or not studioConfig.FIREBASE_URL or not studioConfig.FIREBASE_SECRET then
-            return Promise.reject("Config.luau tidak dikonfigurasi dengan benar untuk Studio.")
+            return Promise.reject("Config.luau tidak dikonfigurasi dengan benar untuk Studio. Pastikan FIREBASE_URL dan FIREBASE_SECRET sudah benar.")
         end
         return Promise.resolve({studioConfig.FIREBASE_URL, studioConfig.FIREBASE_SECRET})
     else
         return Promise.new(function(resolve, reject)
             local success, secrets = pcall(function()
                 local SecretService = game:GetService("SecretService")
-                local urlName = Config.Production.FIREBASE_URL_SECRET_NAME
-                local secretName = Config.Production.FIREBASE_SECRET_NAME
-                return {SecretService:GetSecret(urlName), SecretService:GetSecret(secretName)}
+                return {SecretService:GetSecret(Config.Production.FIREBASE_URL_SECRET_NAME), SecretService:GetSecret(Config.Production.FIREBASE_SECRET_NAME)}
             end)
-
-            if success and secrets[1] and secrets[2] then
-                resolve(secrets)
-            else
-                reject("Gagal mengambil rahasia Firebase dari SecretService.")
-            end
+            if success and secrets[1] and secrets[2] then resolve(secrets) else reject("Gagal mengambil rahasia Firebase.") end
         end)
     end
 end
 
--- Fungsi umum untuk permintaan Firebase
 local function _requestFirebase(method, path, data)
-    return getFirebaseSecrets():andThen(function(secrets)
-        local FIREBASE_URL, FIREBASE_SECRET = table.unpack(secrets)
-        local url = string.format("%s%s.json?auth=%s", FIREBASE_URL, path, FIREBASE_SECRET)
-        local body = data and HttpService:JSONEncode(data) or ""
+    return Promise.new(function(resolve, reject)
+        getFirebaseSecrets():andThen(function(secrets)
+            local FIREBASE_URL, FIREBASE_AUTH_KEY = table.unpack(secrets)
+            local url = string.format("%s%s.json?auth=%s", FIREBASE_URL, path, FIREBASE_AUTH_KEY)
+            
+            local requestOptions = { Url = url, Method = method, Headers = {["Content-Type"] = "application/json"} }
+            if data and method ~= "GET" and method ~= "HEAD" then
+                requestOptions.Body = HttpService:JSONEncode(data)
+            end
 
-        return Promise.new(function(resolve, reject)
             task.spawn(function()
-                local success, result = pcall(function() 
-                    return HttpService:RequestAsync({
-                        Url = url,
-                        Method = method,
-                        Headers = {["Content-Type"] = "application/json"},
-                        Body = body
-                    })
+                local success, response = pcall(function() 
+                    return HttpService:RequestAsync(requestOptions) 
                 end)
 
                 if not success then
-                    return reject(string.format("Permintaan Firebase gagal: %s", tostring(result)))
+                    reject(string.format("RequestAsync pcall failed: %s", tostring(response)))
+                elseif not response.Success then
+                    reject(string.format("HTTP Error %d: %s", response.StatusCode, response.Body))
+                elseif response.Body == "null" or response.Body == "" then
+                    resolve(nil) -- Resolve with nil for empty data
+                else
+                    local decodeSuccess, result = pcall(HttpService.JSONDecode, HttpService, response.Body)
+                    if decodeSuccess then
+                        resolve(result)
+                    else
+                        reject("JSONDecode failed: " .. tostring(result))
+                    end
                 end
-
-                if not result.Success then
-                     return reject(string.format("HTTP Error %d: %s", result.StatusCode, result.Body))
-                end
-
-                resolve(HttpService:JSONDecode(result.Body))
             end)
+        end):catch(function(err)
+            reject("Gagal mendapatkan rahasia Firebase: " .. tostring(err))
         end)
     end)
 end
 
 local function getInitialData(player)
-    return {
-        userId = player.UserId,
-        name = player.Name,
-        joinDate = os.time(),
-        lastSeen = os.time(),
-        coins = 100, gems = 5, level = 1, xp = 0, inventory = {}
-    }
+    return { userId = player.UserId, name = player.Name, joinDate = os.time(), lastSeen = os.time(), coins = 100, gems = 5, level = 1, xp = 0, inventory = {} }
 end
 
--- Menyimpan data utama ke path yang tetap
-function DataService:SaveToFirebase(player)
-    local userId = player.UserId
-    local dataToSave = playerSessionData[userId]
-    if not dataToSave then
-        return Promise.reject(string.format("Tidak ada data sesi untuk disimpan ke Firebase bagi pemain %d", userId))
+local function createMergedData(liveData, template)
+    local mergedData = {}
+    for key, defaultValue in pairs(template) do
+        local liveValue = (type(liveData) == 'table' and liveData[key] or nil)
+        if liveValue == nil then
+            mergedData[key] = defaultValue
+        elseif type(liveValue) == 'table' and type(defaultValue) == 'table' then
+            mergedData[key] = createMergedData(liveValue, defaultValue) 
+        else
+            mergedData[key] = liveValue
+        end
     end
-    dataToSave.lastSeen = os.time()
-
-    print(string.format("   -> Menyimpan data utama ke Firebase untuk %s...", player.Name))
-    return _requestFirebase("PUT", "player_data/" .. userId, dataToSave)
-end
-
--- Menyimpan backup historis dengan timestamp
-function DataService:BackupToFirebase(player, eventName)
-    local userId = player.UserId
-    local dataToBackup = playerSessionData[userId]
-    if not dataToBackup then
-        return Promise.reject(string.format("Tidak ada data sesi untuk di-backup bagi pemain %d", userId))
+    if type(liveData) == 'table' then
+        for key, liveValue in pairs(liveData) do
+            if mergedData[key] == nil then
+                mergedData[key] = liveValue
+            end
+        end
     end
-
-    local timestamp = os.time()
-    local path = string.format("player_backups/%d/%d_%s", userId, timestamp, eventName)
-    
-    print(string.format("   -> Membuat backup historis di Firebase: %s...", eventName))
-    return _requestFirebase("POST", path, dataToBackup)
-end
-
--- Memuat data utama dari Firebase
-function DataService:_LoadFromFirebase(player)
-    print(string.format("   -> Mencoba memuat data dari Firebase untuk %s...", player.Name))
-    return _requestFirebase("GET", "player_data/" .. player.UserId)
+    return mergedData
 end
 
 --///////////////////////////////////////////////////////////////////////////
 --// FUNGSI API (DATASTORE & FIREBASE)
 --///////////////////////////////////////////////////////////////////////////
 
-function DataService:GetPlayerData(player)
-    local userId = player.UserId
-
-    if playerSessionData[userId] then
-        return Promise.resolve(playerSessionData[userId])
-    end
-
-    return self:_LoadFromFirebase(player)
-        :andThen(function(firebaseData)
-            if firebaseData then
-                print("   -> Data ditemukan di Firebase.")
-                playerSessionData[userId] = firebaseData
-                return playerSessionData[userId]
-            end
-            
-            -- Fallback ke DataStore jika di Firebase tidak ada
-            print("   -> Data tidak ditemukan di Firebase, mencoba dari DataStore...")
-            return Promise.new(function(resolve, reject)
-                task.spawn(function()
-                    local success, dataOrError = pcall(function() return playerDataStore:GetAsync(tostring(userId)) end)
-                    if not success then
-                        return reject(string.format("Gagal memuat dari DataStore: %s", tostring(dataOrError)))
-                    end
-
-                    if dataOrError then
-                        print("   -> Data ditemukan di DataStore.")
-                        playerSessionData[userId] = dataOrError
-                    else
-                        print("   -> Data baru dibuat untuk pemain.")
-                        playerSessionData[userId] = getInitialData(player)
-                        -- Simpan data awal ini ke kedua sistem
-                        self:SavePlayerData(player, "New Player Join"):catch(warn)
-                        self:SaveToFirebase(player):catch(warn)
-                    end
-                    resolve(playerSessionData[userId])
-                end)
-            end)
-        end)
+function DataService:GetSessionData(player)
+    return playerSessionData[player.UserId]
 end
 
-function DataService:SavePlayerData(player, reason)
+-- NEW (v5.1): Fungsi terpusat untuk memodifikasi state pemain.
+function DataService:SetState(player, key, value)
+    local userId = player.UserId
+    local data = playerSessionData[userId]
+    if not data then
+        warn(string.format("Peringatan: Mencoba mengatur state untuk pemain %s yang datanya belum dimuat.", player.Name))
+        return
+    end
+    
+    data[key] = value
+    
+    -- Beri tahu listener di sisi server (mis. LeaderboardService)
+    self.StateUpdated:Fire(player, data)
+    
+    -- Kirim state yang diperbarui ke klien yang relevan
+    self:UpdateClientState(player)
+end
+
+
+function DataService:SaveToFirebase(player)
+    local userId = player.UserId
+    local dataToSave = playerSessionData[userId]
+    if not dataToSave then return Promise.reject("Tidak ada data sesi untuk disimpan ke Firebase.") end
+    dataToSave.lastSeen = os.time()
+    print(string.format("   -> Mengirim data utama ke Firebase untuk %s...", player.Name))
+    return _requestFirebase("PUT", "player_data/" .. userId, dataToSave)
+end
+
+function DataService:BackupToFirebase(player, eventName)
+    local userId = player.UserId
+    local dataToBackup = playerSessionData[userId] or {}
+    local timestamp = os.time()
+    local path = string.format("player_backups/%d/%d_%s", userId, timestamp, eventName)
+    print(string.format("   -> Membuat backup historis di Firebase: %s...", eventName))
+    return _requestFirebase("POST", path, dataToBackup)
+end
+
+function DataService:_LoadFromFirebase(player)
+    print(string.format("   -> Mencoba memuat data dari Firebase untuk %s...", player.Name))
+    return _requestFirebase("GET", "player_data/" .. player.UserId)
+end
+
+function DataService:SaveToDataStore(player, reason)
     return Promise.new(function(resolve, reject)
         local userId = player.UserId
         local dataToSave = playerSessionData[userId]
-
-        if not dataToSave then
-            return reject(string.format("Tidak ada data sesi untuk disimpan bagi pemain %d", userId))
-        end
-
+        if not dataToSave then reject("Tidak ada data sesi untuk disimpan.") return end
         dataToSave.lastSeen = os.time()
-
         task.spawn(function()
             print(string.format("   -> Menyimpan data ke DataStore untuk %s (Alasan: %s)...", player.Name, reason))
-            local success, err = pcall(function() playerDataStore:SetAsync(tostring(userId), dataToSave) end)
-            if success then
-                resolve()
+            local s, e = pcall(function() playerDataStore:SetAsync(tostring(userId), dataToSave) end)
+            if s then resolve() else reject(string.format("Gagal menyimpan ke DataStore: %s", tostring(e))) end
+        end)
+    end)
+end
+
+function DataService:ClearFromDataStore(player)
+    return Promise.new(function(resolve, reject)
+        print(string.format("   -> Membersihkan DataStore untuk pemain %s...", player.Name))
+        local s, e = pcall(function() playerDataStore:RemoveAsync(tostring(player.UserId)) end)
+        if s then resolve() else reject(string.format("Gagal membersihkan DataStore: %s", tostring(e))) end
+    end)
+end
+
+function DataService:GetPlayerData(player)
+    local userId = player.UserId
+    if playerSessionData[userId] then return Promise.resolve(playerSessionData[userId]) end
+
+    return Promise.new(function(resolve, reject)
+        self:_LoadFromFirebase(player):andThen(function(firebaseData)
+            local template = getInitialData(player)
+            local finalData
+
+            if firebaseData then
+                print("   -> Data ditemukan di Firebase.")
+                print("   -> [DEBUG] FULL FIREBASE DATA: " .. HttpService:JSONEncode(firebaseData))
+                finalData = createMergedData(firebaseData, template)
             else
-                reject(string.format("Gagal menyimpan ke DataStore: %s", tostring(err)))
+                print("   -> Data tidak ditemukan di Firebase, mencoba dari DataStore...")
+                local success, dataOrError = pcall(function() return playerDataStore:GetAsync(tostring(userId)) end)
+                if success then
+                    if dataOrError then
+                        print("   -> Data ditemukan di DataStore.")
+                        finalData = createMergedData(dataOrError, template)
+                    else
+                        print("   -> Data baru dibuat untuk pemain.")
+                        finalData = template
+                    end
+                else
+                    reject("Gagal memuat dari DataStore: " .. tostring(dataOrError))
+                    return
+                end
+            end
+            
+            playerSessionData[userId] = finalData
+            resolve(finalData)
+
+        end):catch(function(err)
+            warn("Error saat memuat dari Firebase: " .. tostring(err) .. ". Mencoba fallback ke DataStore.")
+            local success, dataOrError = pcall(function() return playerDataStore:GetAsync(tostring(userId)) end)
+            if success and dataOrError then
+                 print("   -> Fallback ke DataStore berhasil.")
+                 local template = getInitialData(player)
+                 local finalData = createMergedData(dataOrError, template)
+                 playerSessionData[userId] = finalData
+                 resolve(finalData)
+            else
+                 reject("Gagal memuat dari Firebase dan DataStore. Tidak dapat memuat data pemain.")
             end
         end)
     end)
+end
+
+function DataService:UpdateClientState(player)
+    local data = self:GetSessionData(player)
+    if data then
+        local clientStateChannel = ReplicatedStorage:WaitForChild("ClientStateChannel", 30)
+        if clientStateChannel then
+            clientStateChannel:FireClient(player, data)
+        else
+            warn("[DataService] Tidak dapat menemukan ClientStateChannel untuk memperbarui klien.")
+        end
+    end
 end
 
 --///////////////////////////////////////////////////////////////////////////
@@ -205,62 +262,65 @@ end
 --///////////////////////////////////////////////////////////////////////////
 
 function DataService:Init()
-    print("💾 [DataService] Inisialisasi Layanan Data dengan skrip hybrid (Firebase Priority)...")
-    local clientStateChannel = ReplicatedStorage:WaitForChild("ClientStateChannel")
+    print("💾 [DataService] Inisialisasi Layanan Data v5.1 (State Update Signal)...")
+    local clientStateChannel = ReplicatedStorage:FindFirstChild("ClientStateChannel") or Instance.new("RemoteEvent", ReplicatedStorage)
+    clientStateChannel.Name = "ClientStateChannel"
 
     Players.PlayerAdded:Connect(function(player)
-        self:GetPlayerData(player)
-            :andThen(function(playerData)
-                print(string.format("🎨 [DataService] Mengirim state awal ke klien %s.", player.Name))
-                clientStateChannel:FireClient(player, playerData)
-
-                print(string.format("   -> Data untuk %s siap. Membuat backup join log.", player.Name))
-                return self:BackupToFirebase(player, "PlayerJoined")
-            end)
-            :catch(function(err)
-                warn(string.format("❌ [ERROR ON JOIN] Gagal memproses pemain %s: %s", player.Name, tostring(err)))
-            end)
+        self:GetPlayerData(player):andThen(function(playerData)
+            if not playerData then warn("Data pemain tidak valid saat bergabung.") return end
+            print(string.format("🎨 [DataService] Mengirim state awal ke klien %s.", player.Name))
+            self:UpdateClientState(player)
+            return self:BackupToFirebase(player, "PlayerJoined")
+        end):catch(function(err)
+            warn(string.format("❌ [ERROR ON JOIN] %s: %s", player.Name, tostring(err)))
+            player:Kick("Gagal memuat data Anda. Silakan coba lagi.")
+        end)
     end)
 
     Players.PlayerRemoving:Connect(function(player)
-        -- Pertama, simpan data sesi terakhir ke DataStore dan Firebase secara bersamaan
-        self:SavePlayerData(player, "Player Leaving")
+        if not playerSessionData[player.UserId] then return end
+        print(string.format("➡️ [DataService] Memulai proses logout untuk %s...", player.Name))
+
+        self:SaveToDataStore(player, "Player Leaving")
             :andThen(function() return self:SaveToFirebase(player) end)
-            :andThen(function() return self:BackupToFirebase(player, "PlayerLeft") end) -- Buat juga backup log
+            :andThen(function() return self:ClearFromDataStore(player) end)
             :andThen(function()
                 playerSessionData[player.UserId] = nil
-                print(string.format("   -> Cache sesi untuk pemain %s berhasil dibersihkan.", player.Name))
+                print("   -> Cache sesi berhasil dibersihkan.")
             end)
             :catch(function(err)
-                warn(string.format("❌ [ERROR ON LEAVE] Gagal memproses data saat keluar untuk %s: %s", player.Name, tostring(err)))
+                warn(string.format("❌ [ERROR ON LEAVE] %s: %s", player.Name, tostring(err)))
+                playerSessionData[player.UserId] = nil
             end)
     end)
 
-    -- Auto-save hanya ke DataStore untuk efisiensi jaringan
     task.spawn(function()
-        while true do
-            task.wait(300) -- Interval auto-save
+        while task.wait(300) do
             for _, p in ipairs(Players:GetPlayers()) do
-                self:SavePlayerData(p, "Auto-Save"):catch(warn)
+                if playerSessionData[p.UserId] then
+                    self:SaveToDataStore(p, "Auto-Save"):catch(warn)
+                end
             end
         end
     end)
 
     game:BindToClose(function()
-        if not RunService:IsStudio() then
-            print("🚨 [DataService] Server akan ditutup. Menyimpan data semua pemain...")
-            local savePromises = {}
-            for _, p in ipairs(Players:GetPlayers()) do
-                -- Simpan ke kedua sistem saat server shutdown
-                table.insert(savePromises, self:SavePlayerData(p, "Server Shutdown"))
-                table.insert(savePromises, self:SaveToFirebase(p))
+        if RunService:IsStudio() then return end
+        print("🚨 [DataService] Server akan ditutup. Menyimpan data semua pemain...")
+        local promises = {}
+        for _, p in ipairs(Players:GetPlayers()) do
+            if playerSessionData[p.UserId] then
+                table.insert(promises, self:SaveToDataStore(p, "Server Shutdown")
+                    :andThen(function() return self:SaveToFirebase(p) end)
+                )
             end
-            Promise.all(savePromises):andThen(function() print("✅ Semua data pemain berhasil disimpan.") end):catch(warn)
-            task.wait(5)
         end
+        Promise.all(promises):andThen(function() print("✅ Semua data pemain berhasil disimpan.") end):catch(warn)
+        task.wait(5)
     end)
 
-    print("✅ [DataService] Layanan Data berhasil diinisialisasi.")
+    print("✅ [DataService] Layanan Data berhasil diinisialisai.")
 end
 
 return DataService

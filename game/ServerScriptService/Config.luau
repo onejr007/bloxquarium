@@ -1,19 +1,9 @@
 --[[
-    Config.luau
 
-    MODUL KONFIGURASI LOKAL UNTUK PENGEMBANGAN DI STUDIO
+    Konfigurasi Game Terpusat (Config.luau v1.2)
 
-    =========================================================================
-    !!! PERINGATAN KEAMANAN KRITIS !!!
-    =========================================================================
-    
-    File ini berisi informasi sensitif (seperti kunci API).
-
-    >> TAMBAHKAN FILE INI KE `.gitignore` ANDA SEKARANG JUGA! <<
-
-    Jangan pernah meng-commit file ini ke repositori Git publik atau membagikannya.
-    File ini HANYA untuk kenyamanan pengujian di Roblox Studio. Di server
-    game yang sudah di-publish, kunci akan diambil dengan aman dari SecretService.
+    PENTING: KREDENSIAL DI SINI HANYA UNTUK PENGUJIAN LOKAL DI STUDIO.
+    File ini harus ditambahkan ke .gitignore untuk mencegah kebocoran kunci API.
 
 ]]
 
@@ -26,6 +16,8 @@ Config.Studio = {
     
     -- [PENTING] Ini adalah **DATABASE SECRET**, bukan API Key.
     -- Diperlukan untuk otentikasi server legacy.
+    -- JANGAN PERNAH MENGISI SECRET DI SINI UNTUK LINGKUNGAN PRODUKSI
+    -- Secret ini akan diambil dari SecretService di lingkungan produksi.
     FIREBASE_SECRET = "OVIURisf0NwJpGjooxUEVos4tcYyLiFHCjAwziGS"
 }
 
@@ -33,7 +25,8 @@ Config.Studio = {
 -- Nama-nama ini harus cocok dengan nama secret yang Anda buat di Creator Dashboard.
 Config.Production = {
     FIREBASE_URL_SECRET_NAME = "FIREBASE_URL",
-    FIREBASE_SECRET_NAME = "FIREBASE_SECRET" -- Nama secret untuk Database Secret Anda
+    -- Pastikan nama secret di Roblox cocok dengan ini
+    FIREBASE_SECRET_NAME = "FIREBASE_SECRET"
 }
 
 return Config

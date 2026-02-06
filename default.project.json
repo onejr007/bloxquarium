@@ -2,11 +2,9 @@
   "name": "bloxquarium",
   "tree": {
     "$className": "DataModel",
-
     "ServerScriptService": {
       "$path": "game/ServerScriptService"
     },
-
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "$path": "game/StarterPlayer/StarterPlayerScripts"
@@ -15,30 +13,15 @@
         "$path": "game/StarterPlayer/StarterGui"
       }
     },
-
     "ReplicatedStorage": {
       "$path": "game/ReplicatedStorage",
       "Assets": {
-        "$className": "Folder",
-        "Models": {
-          "$path": "assets/models"
-        },
-        "Sounds": {
-          "$path": "assets/sounds"
-        },
-        "Images": {
-          "$path": "assets/images"
-        },
-        "Animations": {
-          "$path": "assets/animations"
-        }
+        "$className": "Folder"
       }
     },
-
     "ReplicatedFirst": {
       "$path": "game/ReplicatedFirst"
     },
-
     "Workspace": {
       "$path": "game/Workspace",
       "$properties": {
@@ -67,7 +50,6 @@
         }
       }
     },
-
     "Lighting": {
       "$path": "game/Lighting",
       "$properties": {
@@ -82,26 +64,21 @@
         "Technology": "Voxel"
       }
     },
-
     "SoundService": {
       "$path": "game/SoundService",
       "$properties": {
         "RespectFilteringEnabled": true
       }
     },
-
     "TweenService": {
       "$path": "game/TweenService"
     },
-
     "HttpService": {
       "$path": "game/HttpService"
     },
-
     "MarketplaceService": {
       "$path": "game/MarketplaceService"
     },
-
     "DataStoreService": {
       "$path": "game/DataStoreService"
     }

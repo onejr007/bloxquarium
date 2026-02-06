@@ -8,6 +8,8 @@ local SharedModules = ReplicatedStorage.Shared
 
 -- Cukup require AssetManager, satu-satunya handler yang Anda perlukan.
 local AssetManager = require(SharedModules.AssetManager)
+-- INTEGRASI: Impor RemoteClient untuk komunikasi yang aman
+local RemoteClient = require(SharedModules.RemoteClient)
 
 print("🚀 [ClientInit] Menggunakan AssetManager baru...")
 
@@ -54,3 +56,9 @@ else
 end
 
 print("\n✨ [ClientInit] Demo AssetManager selesai! ✨")
+
+-- INTEGRASI: Memberi tahu server bahwa klien telah selesai memuat dan siap.
+-- Ini menggunakan sistem RemoteService yang aman dengan validasi nonce.
+print("\n🔌 [RemoteClient] Mengirim sinyal 'PlayerReady' ke server...")
+RemoteClient:FireServer("PlayerReady")
+print("✅ [RemoteClient] Sinyal terkirim. Server sekarang tahu kita siap.")

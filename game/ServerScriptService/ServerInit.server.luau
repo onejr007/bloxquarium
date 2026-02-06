@@ -14,25 +14,29 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameBootstrapper"))
 
--- PERBAIKAN: Me-require DataService yang baru
+-- Import Layanan Inti Server
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
+local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
+
+-- PERBAIKAN: Inisialisasi RemoteService SEGERA untuk menghindari race condition.
+-- Ini membuat channel komunikasi sebelum klien mencoba terhubung.
+RemoteService:Init()
 
 -- Start professional bootstrap sequence
 GameBootstrapper.StartBootstrapAsync(function(success, state)
 	if success then
 		print("✅ [Server] Game bootstrap completed successfully!")
 		
-		-- PERBAIKAN: Menginisialisasi DataService setelah bootstrap berhasil
-		DataService:Init()
+		-- Inisialisasi sisa layanan inti di dalam bootstrap
+        DataService:Init()
+
+        -- Daftarkan event yang aman setelah sistem siap
+        RemoteService:Register("PlayerReady", function(player)
+            print(string.format("🔌 [RemoteService] Menerima sinyal 'PlayerReady' yang aman dari %s!", player.Name))
+            -- Di sini Anda bisa memicu logika game lanjutan untuk pemain tersebut
+        end)
 
 		print("🎮 [Server] Bloxquarium is now ready for players!")
-		
-		-- Optional: Run demo setelah bootstrap selesai
-		-- local ExampleUsage = require(game.ReplicatedStorage.Shared.ExampleUsage)
-		-- spawn(function()
-		--     wait(2) -- Tunggu sebentar setelah bootstrap
-		--     ExampleUsage.RunDemo()
-		-- end)
 		
 	else
 		warn("❌ [Server] Game bootstrap failed!")

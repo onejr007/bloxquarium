@@ -1,10 +1,8 @@
 --[[
-	init.server.luau (v1.2 - Simplified Init Flow)
+	init.server.luau (v1.4 - Final Fix)
 	
-	🎮 BLOXQUARIUM SERVER ENTRY POINT 🎮
-	
-	Entry point utama server yang menggunakan GameBootstrapper
-	sebagai otak penjalan utama untuk startup sequence profesional
+	Fixes the final startup crash by calling the correct AssetManager function
+	(`preloadInitialAsync` instead of the old `preloadAll`).
 ]]
 
 print("🚀 [Server] Starting Bloxquarium Professional Game Engine...")
@@ -17,6 +15,7 @@ local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitFo
 -- Import Layanan Inti Server
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
 local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
+local AssetManager = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("AssetManager"))
 
 -- Inisialisasi Saluran Komunikasi PENTING di Awal
 -- 1. Inisialisasi RemoteService untuk komunikasi aman client-server.
@@ -34,11 +33,11 @@ GameBootstrapper.StartBootstrapAsync(function(success, state)
 		print("✅ [Server] Game bootstrap completed successfully!")
 		
 		-- Inisialisasi layanan inti di dalam bootstrap.
-        -- Init harus dipanggil SETELAH semua channel komunikasi dibuat.
         DataService:Init()
 
-        -- Event 'PlayerReady' tidak diperlukan lagi. Alur data sekarang ditangani
-        -- secara otomatis oleh DataService -> ClientStateChannel.
+        -- Mulai preloading aset Kritis setelah layanan inti siap.
+        print("📦 [Server] Starting critical asset preloading...")
+        AssetManager.preloadInitialAsync() -- FIX: Changed from preloadAll to preloadInitialAsync
 
 		print("🎮 [Server] Bloxquarium is now ready for players!")
 		

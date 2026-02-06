@@ -16,7 +16,7 @@
     "ReplicatedStorage": {
       "$path": "game/ReplicatedStorage",
       "Assets": {
-        "$className": "Folder"
+        "$path": "assets"
       }
     },
     "ReplicatedFirst": {
@@ -80,7 +80,7 @@
       "$path": "game/MarketplaceService"
     },
     "DataStoreService": {
-      "$path": "game/DataStoreService"
+      "$path": 'game/DataStoreService'
     }
   }
 }

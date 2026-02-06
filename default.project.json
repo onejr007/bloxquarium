@@ -3,27 +3,44 @@
   "tree": {
     "$className": "DataModel",
 
-    "ReplicatedStorage": {
-      "Shared": {
-        "$path": "src/shared"
-      }
-    },
-
     "ServerScriptService": {
-      "Server": {
-        "$path": "src/server"
-      }
+      "$path": "game/ServerScriptService"
     },
 
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "Client": {
-          "$path": "src/client"
+        "$path": "game/StarterPlayer/StarterPlayerScripts"
+      },
+      "StarterGui": {
+        "$path": "game/StarterPlayer/StarterGui"
+      }
+    },
+
+    "ReplicatedStorage": {
+      "$path": "game/ReplicatedStorage",
+      "Assets": {
+        "$className": "Folder",
+        "Models": {
+          "$path": "assets/models"
+        },
+        "Sounds": {
+          "$path": "assets/sounds"
+        },
+        "Images": {
+          "$path": "assets/images"
+        },
+        "Animations": {
+          "$path": "assets/animations"
         }
       }
     },
 
+    "ReplicatedFirst": {
+      "$path": "game/ReplicatedFirst"
+    },
+
     "Workspace": {
+      "$path": "game/Workspace",
       "$properties": {
         "FilteringEnabled": true
       },
@@ -48,12 +65,11 @@
             512
           ]
         }
-      },
-      "Assets": {
-        "$path": "assets"
       }
     },
+
     "Lighting": {
+      "$path": "game/Lighting",
       "$properties": {
         "Ambient": [
           0,
@@ -66,10 +82,28 @@
         "Technology": "Voxel"
       }
     },
+
     "SoundService": {
+      "$path": "game/SoundService",
       "$properties": {
         "RespectFilteringEnabled": true
       }
+    },
+
+    "TweenService": {
+      "$path": "game/TweenService"
+    },
+
+    "HttpService": {
+      "$path": "game/HttpService"
+    },
+
+    "MarketplaceService": {
+      "$path": "game/MarketplaceService"
+    },
+
+    "DataStoreService": {
+      "$path": "game/DataStoreService"
     }
   }
 }

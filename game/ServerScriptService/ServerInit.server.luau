@@ -1,5 +1,5 @@
 --[[
-	init.server.luau
+	init.server.luau (v1.2 - Simplified Init Flow)
 	
 	🎮 BLOXQUARIUM SERVER ENTRY POINT 🎮
 	
@@ -18,23 +18,27 @@ local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitFo
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
 local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
 
--- PERBAIKAN: Inisialisasi RemoteService SEGERA untuk menghindari race condition.
--- Ini membuat channel komunikasi sebelum klien mencoba terhubung.
+-- Inisialisasi Saluran Komunikasi PENTING di Awal
+-- 1. Inisialisasi RemoteService untuk komunikasi aman client-server.
 RemoteService:Init()
+
+-- 2. Buat RemoteEvent untuk sinkronisasi state klien.
+print("🎨 [Server] Membuat ClientStateChannel...")
+local clientStateChannel = Instance.new("RemoteEvent")
+clientStateChannel.Name = "ClientStateChannel"
+clientStateChannel.Parent = ReplicatedStorage
 
 -- Start professional bootstrap sequence
 GameBootstrapper.StartBootstrapAsync(function(success, state)
 	if success then
 		print("✅ [Server] Game bootstrap completed successfully!")
 		
-		-- Inisialisasi sisa layanan inti di dalam bootstrap
+		-- Inisialisasi layanan inti di dalam bootstrap.
+        -- Init harus dipanggil SETELAH semua channel komunikasi dibuat.
         DataService:Init()
 
-        -- Daftarkan event yang aman setelah sistem siap
-        RemoteService:Register("PlayerReady", function(player)
-            print(string.format("🔌 [RemoteService] Menerima sinyal 'PlayerReady' yang aman dari %s!", player.Name))
-            -- Di sini Anda bisa memicu logika game lanjutan untuk pemain tersebut
-        end)
+        -- Event 'PlayerReady' tidak diperlukan lagi. Alur data sekarang ditangani
+        -- secara otomatis oleh DataService -> ClientStateChannel.
 
 		print("🎮 [Server] Bloxquarium is now ready for players!")
 		

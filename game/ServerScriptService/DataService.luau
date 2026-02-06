@@ -1,5 +1,5 @@
 --[[
-    DataService.luau (v3 - Hybrid Secrets)
+    DataService.luau (v3.1 - Race Condition Fix)
 
     Layanan data terpusat, di-refactor dengan 5 pilar modern scripting:
     1. Optimasi: Menggunakan pustaka `task` untuk penjadwalan.
@@ -19,33 +19,27 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 --=================[ MODULES ]=================--
 local Promise = require(ReplicatedStorage.Shared.Promise)
--- SECURITY: Mengimpor modul konfigurasi yang berisi rahasia untuk mode Studio
 local Config = require(script.Parent.Config)
 
 --=================[ CONFIGURATION ]=================--
 local playerDataStore = DataStoreService:GetDataStore("PlayerDataV1")
+-- local clientStateChannel = ReplicatedStorage:WaitForChild("ClientStateChannel") -- DIHAPUS: Ini menyebabkan race condition.
 local DataService = {}
 
--- MEMORY MANAGEMENT: Cache sesi untuk data pemain yang aktif.
 local playerSessionData = {}
 
 --///////////////////////////////////////////////////////////////////////////
 --// FUNGSI INTERNAL & KEAMANAN
 --///////////////////////////////////////////////////////////////////////////
 
--- SECURITY (HYBRID): Fungsi ini secara cerdas mendapatkan rahasia Firebase.
--- - Di Studio, ia menggunakan file Config.luau lokal.
--- - Di server live, ia menggunakan SecretService yang aman.
 local function getFirebaseSecrets()
     if RunService:IsStudio() then
-        print("🔍 [SECURITY] Berjalan di Studio. Menggunakan konfigurasi lokal dari Config.luau.")
         local studioConfig = Config.Studio
         if not studioConfig or not studioConfig.FIREBASE_URL or not studioConfig.FIREBASE_API_KEY then
             return Promise.reject("Config.luau tidak dikonfigurasi dengan benar untuk Studio.")
         end
         return Promise.resolve({studioConfig.FIREBASE_URL, studioConfig.FIREBASE_API_KEY})
     else
-        print("🔐 [SECURITY] Berjalan di server live. Menggunakan SecretService.")
         return Promise.new(function(resolve, reject)
             local success, secrets = pcall(function()
                 local SecretService = game:GetService("SecretService")
@@ -57,7 +51,7 @@ local function getFirebaseSecrets()
             if success and secrets[1] and secrets[2] then
                 resolve(secrets)
             else
-                reject("Gagal mengambil rahasia Firebase dari SecretService. Pastikan sudah diatur di Creator Dashboard.")
+                reject("Gagal mengambil rahasia Firebase dari SecretService.")
             end
         end)
     end
@@ -74,7 +68,6 @@ local function getInitialData(player)
 end
 
 function DataService:_BackupToFirebase(player, eventName)
-    -- Panggil fungsi hybrid untuk mendapatkan rahasia
     return getFirebaseSecrets()
     :andThen(function(secrets)
         local FIREBASE_URL, FIREBASE_API_KEY = table.unpack(secrets)
@@ -93,7 +86,6 @@ function DataService:_BackupToFirebase(player, eventName)
             task.spawn(function()
                 local success, result = pcall(function() HttpService:PostAsync(url, HttpService:JSONEncode(dataToBackup)) end)
                 if success then
-                    print(string.format("🔥 [FIREBASE BACKUP] Berhasil mencatat event '%s' untuk %s.", eventName, player.Name))
                     resolve()
                 else
                     reject(string.format("Gagal mengirim backup Firebase: %s", tostring(result)))
@@ -110,10 +102,8 @@ end
 function DataService:GetPlayerData(player)
     return Promise.new(function(resolve, reject)
         local userId = player.UserId
-        print(string.format("💾 [ROBLOX DATASTORE] Memuat data untuk pemain: %s (ID: %d)", player.Name, userId))
 
         if playerSessionData[userId] then
-            print("   -> Data ditemukan di cache sesi.")
             return resolve(playerSessionData[userId])
         end
 
@@ -125,10 +115,8 @@ function DataService:GetPlayerData(player)
             end
             
             if dataOrError then
-                print("   -> Data berhasil dimuat dari Roblox DataStore.")
                 playerSessionData[userId] = dataOrError
             else
-                print("   -> Pemain baru terdeteksi. Membuat data awal.")
                 playerSessionData[userId] = getInitialData(player)
                 self:SavePlayerData(player, "New Player Join"):catch(warn)
             end
@@ -148,12 +136,10 @@ function DataService:SavePlayerData(player, reason)
         end
 
         dataToSave.lastSeen = os.time()
-        print(string.format("💾 [ROBLOX DATASTORE] Menyimpan data untuk %s | Alasan: %s", player.Name, reason or "Tidak diketahui"))
 
         task.spawn(function()
             local success, err = pcall(function() playerDataStore:SetAsync(tostring(userId), dataToSave) end)
             if success then
-                print("   -> Data berhasil disimpan ke Roblox DataStore.")
                 resolve()
             else
                 reject(string.format("Gagal menyimpan ke DataStore: %s", tostring(err)))
@@ -168,10 +154,16 @@ end
 
 function DataService:Init()
     print("💾 [DataService] Inisialisasi Layanan Data dengan skrip hybrid...")
+    -- PERBAIKAN: Cari channel di sini, bukan di level global, untuk menghindari race condition.
+    local clientStateChannel = ReplicatedStorage:WaitForChild("ClientStateChannel")
 
     Players.PlayerAdded:Connect(function(player)
         self:GetPlayerData(player)
             :andThen(function(playerData)
+                -- INTEGRASI ClientState: Kirim data awal ke klien agar UI reaktif.
+                print(string.format("🎨 [DataService] Mengirim state awal ke klien %s.", player.Name))
+                clientStateChannel:FireClient(player, playerData)
+
                 print(string.format("   -> Data untuk %s siap. Memulai backup ke Firebase.", player.Name))
                 return self:_BackupToFirebase(player, "PlayerJoined")
             end)
@@ -195,7 +187,6 @@ function DataService:Init()
     task.spawn(function()
         while true do
             task.wait(300) -- Interval auto-save
-            print("💾 [ROBLOX DATASTORE] Memulai auto-save periodik...")
             for _, p in ipairs(Players:GetPlayers()) do
                 self:SavePlayerData(p, "Auto-Save"):catch(warn)
             end
@@ -204,7 +195,6 @@ function DataService:Init()
 
     game:BindToClose(function()
         if not RunService:IsStudio() then
-            print("💾 [ROBLOX DATASTORE] Server akan ditutup. Menyimpan semua data...")
             local savePromises = {}
             for _, p in ipairs(Players:GetPlayers()) do
                 table.insert(savePromises, self:SavePlayerData(p, "Server Shutdown"))

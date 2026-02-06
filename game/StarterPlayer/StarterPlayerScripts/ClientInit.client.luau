@@ -19,12 +19,12 @@ print("🚀 [ClientInit] Inisialisasi Klien v2...")
 print("🎨 [ClientInit] Berlangganan (subscribing) ke perubahan ClientState...")
 
 local function onStateChanged(newState)
-    print("--------------------------------------------------")
-    print("🎨 [ClientInit] State pemain diperbarui!")
-    print(string.format("   - 🪙 Koin: %d", newState.coins or 0))
-    print(string.format("   - 💎 Permata: %d", newState.gems or 0))
-    print(string.format("   - 📈 Level: %d (XP: %d)", newState.level or 1, newState.xp or 0))
-    print("--------------------------------------------------")
+	-- print("--------------------------------------------------")
+	-- print("🎨 [ClientInit] State pemain diperbarui!")
+	-- print(string.format("   - 🪙 Koin: %d", newState.coins or 0))
+	-- print(string.format("   - 💎 Permata: %d", newState.gems or 0))
+	-- print(string.format("   - 📈 Level: %d (XP: %d)", newState.level or 1, newState.xp or 0))
+	-- print("--------------------------------------------------")
 end
 
 -- Hubungkan fungsi di atas ke event perubahan ClientState.

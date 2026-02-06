@@ -1,8 +1,1 @@
-# Project place file
-/bloxquarium.rbxlx
-
-# Roblox Studio lock files
-/*.rbxlx.lock
-/*.rbxl.lock
-
-sourcemap.json
+game/ServerScriptService/Config.luau

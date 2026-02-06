@@ -164,6 +164,7 @@ local function validationPhase()
 	if summary.warningCount > 0 then
 		addWarning(string.format("Validation warnings: %d warnings (non-critical)", 
 			summary.warningCount))
+		SystemValidator.PrintReport()
 	end
 	
 	-- Print validation summary

@@ -24,7 +24,13 @@ AssetRegistry.AssetLoaded = assetLoadedEvent.Event
 local function scanAssets(folder, path)
 	path = path or ""
 	
-	for _, child in pairs(folder:GetChildren()) do
+	-- Get and sort children alphabetically
+	local children = folder:GetChildren()
+	table.sort(children, function(a, b)
+		return a.Name < b.Name
+	end)
+
+	for _, child in ipairs(children) do
 		local currentPath = path == "" and child.Name or path .. "/" .. child.Name
 		
 		if child:IsA("Model") or child:IsA("Part") or child:IsA("MeshPart") then

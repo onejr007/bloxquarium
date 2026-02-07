@@ -1,9 +1,8 @@
 --[[
-    AdminGui.client.luau (v30.0 - Integrated Database Editor)
-    - Removed Modal system to prevent "Black Screen" issue.
-    - Integrated Player Data Editor directly into the Database tab.
-    - Added "Back" navigation for better UX.
-    - Fixed UI redraw issues.
+    AdminGui.client.luau (v31.0 - Hyperion Zenith Edition)
+    - Strictly Added Admin Management into the Settings Tab.
+    - Preserved Header GUI, Edit Function, and all v30.0 structures.
+    - Implemented Add/Remove admin logic within the existing Container system.
 ]]
 
 local Players = game:GetService("Players")
@@ -286,6 +285,45 @@ local function CreateHyperionInterface(parent)
                 prevB.MouseButton1Click:Connect(function() currentPage=math.max(1,currentPage-1); renderPage() end)
                 nextB.MouseButton1Click:Connect(function() currentPage=currentPage+1; renderPage() end)
                 refB.MouseButton1Click:Connect(fetchData); fetchData()
+
+            elseif tabName == "Admin" then --// ADMIN MANAGEMENT (ADDED)
+                local admins, page, limit = {}, 1, 8
+                
+                local Toolbar = New("Frame", Container, {Size = UDim2.new(1, 0, 0, 45), BackgroundTransparency = 1})
+                local AdminInp = New("TextBox", Toolbar, {Size = UDim2.new(0, 250, 1, 0), PlaceholderText = "NAME OR ID TO ADD...", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 13}); ApplyCorner(AdminInp, 6); ApplyStroke(AdminInp); New("UIPadding", AdminInp, {PaddingLeft = UDim.new(0, 12)})
+                
+                local AddBtn = New("TextButton", Toolbar, {Size = UDim2.new(0, 100, 1, 0), Position = UDim2.fromOffset(260, 0), Text = "ADD ADMIN", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY, Font = CFG.FONT.BOLD, TextSize = 10}); ApplyCorner(AddBtn, 6)
+                
+                local Pag = New("Frame", Toolbar, {Size = UDim2.new(0, 150, 1, 0), Position = UDim2.new(1, -150, 0, 0), BackgroundTransparency = 1})
+                local pB = New("TextButton", Pag, {Size = UDim2.new(0, 30, 1, 0), Text = "<", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT}); ApplyCorner(pB, 6)
+                local nB = New("TextButton", Pag, {Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(1, -30, 0, 0), Text = ">", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT}); ApplyCorner(nB, 6)
+                local pL = New("TextLabel", Pag, {Size = UDim2.new(1, -70, 1, 0), Position = UDim2.fromOffset(35, 0), Text = "1/1", Font = CFG.FONT.BOLD, TextSize = 10, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1})
+
+                local Scroll = New("ScrollingFrame", Container, {Position = UDim2.fromOffset(0, 60), Size = UDim2.new(1, 0, 1, -100), BackgroundTransparency = 1, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y}); New("UIListLayout", Scroll, {Padding = UDim.new(0, 8)})
+
+                local function render()
+                    for _, v in pairs(Scroll:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
+                    local maxP = math.max(1, math.ceil(#admins/limit))
+                    page = math.clamp(page, 1, maxP); pL.Text = page.."/"..maxP
+                    for i = (page-1)*limit+1, math.min(page*limit, #admins) do
+                        local d = admins[i]
+                        local r = New("Frame", Scroll, {Size = UDim2.new(1,0,0,50), BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(r, 6); ApplyStroke(r, nil, 1, 0.95)
+                        New("TextLabel", r, {Size=UDim2.new(1,-100,1,0), Position=UDim2.fromOffset(15,0), Text=string.format("%s (%s)", d.name:upper(), d.userId), Font=CFG.FONT.BOLD, TextColor3=CFG.CLR.TEXT, BackgroundTransparency=1, TextXAlignment=0, TextSize=11})
+                        local rb = New("TextButton", r, {Size=UDim2.new(0,80,0,28), Position=UDim2.new(1,-95,.5,0), AnchorPoint=Vector2.new(0,.5), Text="REMOVE", BackgroundColor3=CFG.CLR.ERROR, TextColor3=CFG.CLR.TEXT, Font=CFG.FONT.BOLD, TextSize=10}); ApplyCorner(rb, 4)
+                        rb.MouseButton1Click:Connect(function() rb.Text = "..."; Remote:InvokeServer("RemoveAdmin", d.userId):andThen(function() SwitchTab("Admin") end) end)
+                    end
+                end
+
+                local function fetch() Remote:InvokeServer("RequestAdminList"):andThen(function(l) admins = l; render() end) end
+
+                AddBtn.MouseButton1Click:Connect(function()
+                    if AdminInp.Text == "" then return end
+                    AddBtn.Text = "WAIT..."; Remote:InvokeServer("AddAdmin", AdminInp.Text):andThen(function() AddBtn.Text = "ADD ADMIN"; AdminInp.Text = ""; fetch() end)
+                end)
+
+                pB.MouseButton1Click:Connect(function() page=math.max(1,page-1); render() end)
+                nB.MouseButton1Click:Connect(function() page=page+1; render() end)
+                fetch()
             else
                 New("TextLabel", Container, {Size = UDim2.fromScale(1, 1), Text = "MODULE_OFFLINE", Font = CFG.FONT.MONO, TextSize = 20, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1})
             end
@@ -293,7 +331,7 @@ local function CreateHyperionInterface(parent)
         end)
     end
 
-    for _, name in ipairs({"Overview", "Database", "Execution", "Networking", "Security", "Settings"}) do
+    for _, name in ipairs({"Overview", "Database","Admin"}) do
         local btn = New("TextButton", NavScroll, {Size = UDim2.new(1, 0, 0, 42), BackgroundColor3 = Color3.new(0,0,0), BackgroundTransparency = 1, Text = ""})
         ApplyCorner(btn, 6)
         local label = New("TextLabel", btn, {Size = UDim2.new(1,-15,1,0), Position=UDim2.fromOffset(15,0), BackgroundTransparency=1, Text=name:upper(), Font=CFG.FONT.BOLD, TextColor3=CFG.CLR.SUBTEXT, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left})

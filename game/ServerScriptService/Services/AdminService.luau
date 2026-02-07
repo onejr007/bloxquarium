@@ -1,18 +1,16 @@
 --[[
     AdminService.luau (v6.0 - Admin Management)
-
-    - Added functionality for listing, adding, and removing admins.
-    - Implemented server-side validation and Firebase synchronization for admin list.
-    - Refactored to accept both RemoteService and DataService via the Init method.
-    - Removed all hardcoded `require` paths.
+    - Integrasi penuh dengan Firebase via Injected DataService.
+    - Sistem Antrean (Queue) untuk menangani pengecekan admin sebelum cache siap.
+    - Penanganan penambahan admin via Name (Offline/Online) atau UserID.
+    - Zero Hardcoded Requires (Dependency Injection via :Init).
 ]]
 
+local Players = game:GetService("Players")
+
 --=================[ SERVICES ]=================--
--- Services are injected via the Init method
 local InjectedRemoteService
 local InjectedDataService
-
-local Players = game:GetService("Players")
 
 --=================[ CONFIGURATION ]=================--
 local AdminService = {}
@@ -20,83 +18,73 @@ local AdminService = {}
 local adminIdCache = {} -- {[userIdString] = true}
 local ADMIN_PATH = "/admins"
 
--- Queue system to solve the race condition
 local isCacheReady = false
-local pendingAdminChecks = {} -- Queue of players waiting for a check
+local pendingAdminChecks = {} -- Antrean pemain yang menunggu validasi
 
 --///////////////////////////////////////////////////////////////////////////
 --// INTERNAL FUNCTIONS
 --///////////////////////////////////////////////////////////////////////////
 
--- Saves the current adminIdCache to Firebase
+-- Menyimpan cache saat ini kembali ke Firebase
 local function saveAdminsToDatabase()
     local adminsArray = {}
     for userIdString, _ in pairs(adminIdCache) do
         table.insert(adminsArray, tonumber(userIdString))
     end
+    
     InjectedDataService:Set(ADMIN_PATH, adminsArray):catch(function(err)
-        warn("👑 [AdminService] Failed to save admin data to Firebase: " .. tostring(err))
+        warn("👑 [AdminService] Gagal menyimpan data admin ke Firebase: " .. tostring(err))
     end)
 end
 
--- Process pending admin check requests in the queue
+-- Memproses pemain yang tertahan di antrean saat cache sudah siap
 local function processPendingChecks()
     if isCacheReady then return end
     isCacheReady = true
     
-    print(string.format("👑 [AdminService] Cache is ready. Processing %d queued requests...", #pendingAdminChecks))
+    print(string.format("👑 [AdminService] Cache siap. Memproses %d antrean permintaan...", #pendingAdminChecks))
 
     for _, player in ipairs(pendingAdminChecks) do
         if player and player.Parent then
             local isPlayerAdmin = AdminService.isAdmin(player)
-            print(string.format("👑 [AdminService] Responding (from queue) to %s. Status: %s", player.Name, tostring(isPlayerAdmin)))
             if InjectedRemoteService then
                 InjectedRemoteService:SendToClient(player, "AdminCheckResponse", isPlayerAdmin)
-            else
-                warn("👑 [AdminService] RemoteService not injected. Cannot respond to queued player.")
             end
         end
     end
     
     pendingAdminChecks = {}
-    print("👑 [AdminService] Admin request queue processing complete.")
+    print("👑 [AdminService] Pemrosesan antrean selesai.")
 end
 
--- Validate, initialize, and load the admin cache
+-- Mengambil data dari Firebase dan memasukkannya ke cache lokal
 local function validateAndCacheAdmins()
-    print("👑 [AdminService] Validating and caching admin data from Firebase...")
+    print("👑 [AdminService] Sinkronisasi data admin dari Firebase...")
     
-    -- Using the injected DataService to get admin data
     InjectedDataService:Get(ADMIN_PATH):andThen(function(adminData)
-        if adminData == nil or (typeof(adminData) == "table" and next(adminData) == nil) then -- Check for nil or empty table
-            print("👑 [AdminService] '/admins' path does not exist or is empty. Creating initial structure...")
-            local initialAdmins = {90101532} -- Default admin ID
+        -- Jika path kosong, buat admin default (ID Anda/Owner)
+        if adminData == nil or (typeof(adminData) == "table" and next(adminData) == nil) then 
+            local initialAdmins = {90101532} -- ID Default
             InjectedDataService:Set(ADMIN_PATH, initialAdmins):andThen(function()
                 adminIdCache = {[tostring(initialAdmins[1])] = true}
-                print("👑 [AdminService] Admin cache initialized with default data.")
                 processPendingChecks()
             end)
         elseif typeof(adminData) == "table" then
-            print("👑 [AdminService] Valid admin data found. Loading into cache...")
             local newCache = {}
             for _, adminId in ipairs(adminData) do
                 if typeof(adminId) == "number" then
                     newCache[tostring(adminId)] = true
-                else
-                    warn("👑 [AdminService] Non-numeric adminId found in Firebase data: ", adminId)
                 end
             end
             adminIdCache = newCache
-            print("👑 [AdminService] Admin cache updated successfully from Firebase.")
             processPendingChecks()
         else
-            warn("👑 [AdminService] Data structure at '/admins' is corrupt or invalid type. Admin service may not function correctly.")
-            -- Attempt to reset if corrupted, but for now just process queue
+            warn("👑 [AdminService] Struktur data di '/admins' tidak valid.")
             processPendingChecks() 
         end
     end):catch(function(err)
-        warn("👑 [AdminService] Failed to retrieve admin data from Firebase: " .. tostring(err))
-        processPendingChecks() -- Still process the queue on failure
+        warn("👑 [AdminService] Gagal mengambil data Firebase: " .. tostring(err))
+        processPendingChecks() -- Tetap proses antrean agar UI pemain tidak stuck
     end)
 end
 
@@ -104,25 +92,27 @@ end
 --// REMOTE EVENT HANDLERS
 --///////////////////////////////////////////////////////////////////////////
 
+-- Menangani permintaan pengecekan admin dari Client
 local function handleRequestAdminCheck(player)
     if isCacheReady then
         local isPlayerAdmin = AdminService.isAdmin(player)
-        print(string.format("👑 [AdminService] Responding to direct request for %s. Status: %s", player.Name, tostring(isPlayerAdmin)))
         if InjectedRemoteService then
             InjectedRemoteService:SendToClient(player, "AdminCheckResponse", isPlayerAdmin)
         end
     else
-        print(string.format("👑 [AdminService] Received request from %s. Adding to queue...", player.Name))
+        -- Masukkan ke antrean jika data Firebase belum turun
         table.insert(pendingAdminChecks, player)
     end
 end
 
+-- Mengirim daftar admin ke UI Settings (Hanya jika pengirim adalah admin)
 local function handleRequestAdminList(player)
     if not AdminService.isAdmin(player) then return {} end
 
     local adminList = {}
     for userIdString, _ in pairs(adminIdCache) do
         local userId = tonumber(userIdString)
+        -- Coba cari nama pemain secara lokal, jika tidak ada tandai offline
         local adminPlayer = Players:GetPlayerByUserId(userId)
         table.insert(adminList, {
             userId = userId,
@@ -132,43 +122,50 @@ local function handleRequestAdminList(player)
     return adminList
 end
 
+-- Menambah admin baru berdasarkan Name atau UserID
 local function handleAddAdmin(player, targetIdentifier)
     if not AdminService.isAdmin(player) then return false, "Unauthorized" end
 
-    local targetUserId = tonumber(targetIdentifier) -- Try as ID first
-    local targetName = targetIdentifier
-
-    if not targetUserId then -- If not a number, try to resolve as name
-        local foundPlayer = Players:FindFirstChild(targetName)
-        if foundPlayer and foundPlayer:IsA("Player") then
-            targetUserId = foundPlayer.UserId
+    local targetUserId = tonumber(targetIdentifier)
+    
+    -- Jika input bukan angka (UserID), cari UserID berdasarkan nama
+    if not targetUserId then
+        local success, id = pcall(function()
+            return Players:GetUserIdFromNameAsync(targetIdentifier)
+        end)
+        if success then
+            targetUserId = id
         else
-            return false, "Player not found or invalid ID/Name."
+            return false, "Pemain tidak ditemukan di database Roblox."
         end
     end
 
     if adminIdCache[tostring(targetUserId)] then
-        return false, "Player is already an admin."
+        return false, "Pemain sudah menjadi admin."
     end
     
     adminIdCache[tostring(targetUserId)] = true
     saveAdminsToDatabase()
-    return true, "Admin added successfully!"
+    return true, "Admin berhasil ditambahkan!"
 end
 
+-- Menghapus admin
 local function handleRemoveAdmin(player, targetUserId)
     if not AdminService.isAdmin(player) then return false, "Unauthorized" end
     
     targetUserId = tonumber(targetUserId)
-    if not targetUserId then return false, "Invalid User ID" end
+    if not targetUserId then return false, "UserID tidak valid." end
 
     if not adminIdCache[tostring(targetUserId)] then
-        return false, "Player is not an admin."
+        return false, "Pemain bukan admin."
     end
+
+    -- Mencegah owner menghapus dirinya sendiri (Opsional, tapi disarankan)
+    -- if targetUserId == player.UserId then return false, "Tidak bisa menghapus diri sendiri." end
 
     adminIdCache[tostring(targetUserId)] = nil
     saveAdminsToDatabase()
-    return true, "Admin removed successfully!"
+    return true, "Admin berhasil dihapus!"
 end
 
 --///////////////////////////////////////////////////////////////////////////
@@ -177,8 +174,7 @@ end
 
 function AdminService.isAdmin(player)
     if not player then return false end
-    local userIdString = tostring(player.UserId)
-    return adminIdCache[userIdString] == true
+    return adminIdCache[tostring(player.UserId)] == true
 end
 
 --///////////////////////////////////////////////////////////////////////////
@@ -186,22 +182,24 @@ end
 --///////////////////////////////////////////////////////////////////////////
 
 function AdminService:Init(RemoteService, DataService)
-    InjectedRemoteService = RemoteService -- Dependency Injection
-    InjectedDataService = DataService     -- Dependency Injection
+    InjectedRemoteService = RemoteService
+    InjectedDataService = DataService
     
     if not InjectedRemoteService or not InjectedDataService then
-        warn("🔥 [AdminService] A required service was not provided. Admin checks may not work.")
+        warn("🔥 [AdminService] Service yang diperlukan tidak ditemukan!")
         return
     end
     
+    -- Mulai sinkronisasi Firebase
     validateAndCacheAdmins()
     
+    -- Registrasi Handlers ke RemoteService
     InjectedRemoteService:Register("RequestAdminCheck", handleRequestAdminCheck)
     InjectedRemoteService:RegisterInvoke("RequestAdminList", handleRequestAdminList)
     InjectedRemoteService:RegisterInvoke("AddAdmin", handleAddAdmin)
     InjectedRemoteService:RegisterInvoke("RemoveAdmin", handleRemoveAdmin)
     
-    print("👑 [AdminService] Successfully registered admin management handlers.")
+    print("👑 [AdminService] Berhasil menginisialisasi Manajemen Admin.")
 end
 
 return AdminService

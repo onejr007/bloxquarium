@@ -1,9 +1,7 @@
 --[[
-    RemoteService.luau (v2.2 - ASSET FIX)
+    RemoteService.luau (v2.3 - Event Firing)
 
-    - CRITICAL FIX: Removed the asset transformation logic.
-    - The new `asset_config.luau` is already in the correct format the client expects.
-    - The old transformation function was unintentionally clearing all asset data before sending it.
+    - Added :FireClient() method to allow other server services to securely fire events to clients.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,7 +14,7 @@ local AssetConfig = require(script.Parent.asset_config)
 local RemoteService = {}
 
 local function Log(m)
-    print(string.format("🛡️ [RemoteService v2.2] %s", m))
+    print(string.format("🛡️ [RemoteService v2.3] %s", m))
 end
 
 
@@ -30,12 +28,16 @@ function RemoteService:RegisterInvoke(eventName, handler)
     Remote:OnInvoke(eventName, handler)
 end
 
+function RemoteService:FireClient(player, eventName, args)
+    Log(string.format("Firing client event '%s' for player %s", eventName, player.Name))
+    Remote:FireClient(player, {eventName = eventName, args = args or {}})
+end
+
 function RemoteService:Init()
-    Log("Initializing secure remote handler v2.2...")
+    Log("Initializing secure remote handler v2.3...")
 
     self:RegisterInvoke("GetAssetRegistry", function(player)
         Log(string.format("Asset registry requested by: %s. Sending config directly.", player.Name))
-        -- FIXED: The AssetConfig is now in the correct format and can be sent directly.
         return AssetConfig
     end)
 

@@ -1,15 +1,15 @@
 --[[
-    ServerInit.server.luau (v1.7 - ARCHITECTURE CORRECTION)
+    ServerInit.server.luau (v1.9 - World Ready Sync)
 
-    - CRITICAL FIX: Removed the execution of the client-side `GameBootstrapper` script.
-    - The server no longer attempts to run client-only code, which was the root cause of the `OnClientEvent` crash and asset loading failures.
-    - This restores the fundamental client-server architecture.
+    - Fires a 'WorldReady' event to clients after the world is generated.
+    - Handles players joining after the initial world generation.
 ]]
 
 print("🚀 [Server] Starting Bloxquarium Professional Game Engine...")
 
 -- Import core modules
 local ServerScriptService = game:GetService("ServerScriptService")
+local Players = game:GetService("Players")
 
 -- Import Core Server Services
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
@@ -17,18 +17,23 @@ local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
 local GameActions = require(ServerScriptService:WaitForChild("GameActions"))
 local LeaderboardService = require(ServerScriptService:WaitForChild("LeaderboardService"))
 local AdminService = require(ServerScriptService:WaitForChild("AdminService"))
+local WorldService = require(ServerScriptService:WaitForChild("WorldService"))
 
 -- =======================================================================
 -- CRITICAL INITIALIZATION SEQUENCE
 -- =======================================================================
 
--- Step 1: Initialize the core remote service to enable client-server communication.
+-- Step 1: Generate the game world.
+print("🌍 [Server] Generating game world...")
+WorldService:Generate()
+
+-- Step 2: Initialize the core remote service to enable client-server communication.
 RemoteService:Init()
 
--- Step 2: Initialize other services.
+-- Step 3: Initialize other services.
 LeaderboardService:Init()
 
--- Step 3: Register Game Actions with the correct remote handlers.
+-- Step 4: Register Game Actions with the correct remote handlers.
 print("🛡️ [Server] Registering Secure Game Actions...")
 
 RemoteService:RegisterInvoke("GameAction_BuyItem", function(player, itemId)
@@ -41,8 +46,26 @@ RemoteService:RegisterInvoke("KickPlayer", function(player, targetPlayerName)
 end)
 print("   -> 'KickPlayer' registered for invocation.")
 
--- Step 4: Initialize the DataService. This comes last as it might depend on other systems.
+-- Step 5: Initialize the DataService. This comes last as it might depend on other systems.
 DataService:Init()
+
+-- =======================================================================
+-- WORLD READY NOTIFICATION
+-- =======================================================================
+
+local function onPlayerAdded(player)
+    print(string.format("Player %s joined. Notifying client that world is ready.", player.Name))
+    RemoteService:FireClient(player, "WorldReady")
+end
+
+-- Notify players who are already in the game
+for _, player in ipairs(Players:GetPlayers()) do
+    onPlayerAdded(player)
+end
+
+-- Connect to the PlayerAdded event for new players
+Players.PlayerAdded:Connect(onPlayerAdded)
+
 
 -- =======================================================================
 -- SERVER READY

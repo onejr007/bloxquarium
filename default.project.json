@@ -80,7 +80,7 @@
       "$path": "game/MarketplaceService"
     },
     "DataStoreService": {
-      "$path": 'game/DataStoreService'
+      "$path": "game/DataStoreService"
     }
   }
 }

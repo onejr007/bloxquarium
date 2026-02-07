@@ -1,6 +1,5 @@
 --[[
-
-    Konfigurasi Game Terpusat (Config.luau v1.2)
+    Konfigurasi Game Terpusat (Config.luau v1.3 - URL FIX)
 
     PENTING: KREDENSIAL DI SINI HANYA UNTUK PENGUJIAN LOKAL DI STUDIO.
     File ini harus ditambahkan ke .gitignore untuk mencegah kebocoran kunci API.
@@ -12,7 +11,8 @@ local Config = {}
 -- Konfigurasi untuk lingkungan pengembangan (Roblox Studio)
 Config.Studio = {
     -- URL Realtime Database Firebase Anda
-    FIREBASE_URL = "https://bloxaquarium-default-rtdb.asia-southeast1.firebasedatabase.app/",
+    -- FIXED: Trailing slash removed to prevent double slashes in request URLs.
+    FIREBASE_URL = "https://bloxaquarium-default-rtdb.asia-southeast1.firebasedatabase.app",
     
     -- [PENTING] Ini adalah **DATABASE SECRET**, bukan API Key.
     -- Diperlukan untuk otentikasi server legacy.

@@ -1,8 +1,8 @@
 --[[
-	SystemValidator.luau (v1.5 - FINAL)
+	SystemValidator.luau (v1.6 - CACHE BYPASS ADAPTATION)
 	
-	Sistem validasi yang disederhanakan. Fungsi dependensi yang rusak dan mubazir telah dihapus.
-	Pemeriksaan Script Integrity sudah cukup untuk memvalidasi semua modul yang diperlukan.
+	- This script has been updated to validate for the existence of `AssetManagerV3.luau`.
+	- This change is part of a structural fix to bypass a persistent caching issue.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -67,16 +67,17 @@ local function validateCoreServices()
 	end
 end
 
--- Asset System Validation
+-- Asset System Validation (UPDATED)
 local function validateAssetSystem()
 	local assetsFolder = ReplicatedStorage:FindFirstChild("assets")
 	if not assetsFolder then
 		addResult(validationCategories.ASSET_SYSTEM, "assets Folder", ValidationResult.WARNING, "Main 'assets' folder not found in ReplicatedStorage. This is optional and only needed for 3D models.")
 	end
     
-    local assetManager = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("AssetManager")
+    -- UPDATED: Look for the new AssetManagerV3 file
+    local assetManager = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("AssetManagerV3")
     if not assetManager then
-        addResult(validationCategories.ASSET_SYSTEM, "AssetManager Script", ValidationResult.CRITICAL, "The required 'AssetManager' script is missing from ReplicatedStorage/Shared.")
+        addResult(validationCategories.ASSET_SYSTEM, "AssetManager Script", ValidationResult.CRITICAL, "The required 'AssetManagerV3' script is missing from ReplicatedStorage/Shared.")
     end
 end
 
@@ -140,7 +141,6 @@ function SystemValidator.RunFullValidation()
 	validationStartTime = tick()
 	validationResults = {}
 	
-	-- The broken 'Dependencies' check has been permanently removed.
 	local validationSteps = {
 		{name = "Core Services", func = validateCoreServices},
 		{name = "Asset System", func = validateAssetSystem},

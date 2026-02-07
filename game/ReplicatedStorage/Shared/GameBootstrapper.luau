@@ -1,8 +1,9 @@
 --[[
-	GameBootstrapper.luau (v1.3 - Priority Loading)
+	GameBootstrapper.luau (v1.4 - CACHE BYPASS)
 	
-	Calls the new `preloadInitialAsync` function to only load critical assets
-	during the initial loading screen, drastically reducing wait times.
+	- CRITICAL FIX: This script now explicitly requires `AssetManagerV3.luau`.
+    - This bypasses a persistent and unexplainable caching issue with the original `AssetManager.luau` file.
+    - This structural change forces the engine to load the correct, updated asset loading logic.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10,7 +11,8 @@ local RunService = game:GetService("RunService")
 
 -- Import systems
 local SystemValidator = require(script.Parent.SystemValidator)
-local AssetManager = require(script.Parent.AssetManager)
+-- UPDATED: Explicitly require the new, un-cached AssetManagerV3
+local AssetManager = require(script.Parent.AssetManagerV3)
 
 local GameBootstrapper = {}
 
@@ -73,16 +75,17 @@ local function assetLoadingPhase()
     updatePhase(BootstrapPhase.LOADING_ASSETS, "Synchronizing and preloading CRITICAL game assets...")
     updateProgress(3, 5, "Starting critical asset preload...")
 
-    local syncSuccess = true
     if RunService:IsClient() then
         updateProgress(3, 5, "Requesting asset registry from server...")
-        syncSuccess = AssetManager.syncWithServerAsync()
-    end
+        
+        -- Use a pcall to safely call the async function
+        local success, result = pcall(AssetManager.syncWithServerAsync)
 
-    if not syncSuccess then
-        addError("Failed to synchronize assets with the server.")
-        updatePhase(BootstrapPhase.ERROR, "Asset synchronization failed.")
-        return false
+        if not success or not result then
+            addError("Failed to synchronize assets with the server. Error: " .. tostring(result))
+            updatePhase(BootstrapPhase.ERROR, "Asset synchronization failed.")
+            return false
+        end
     end
 
     local preloadFinished = Instance.new("BindableEvent")
@@ -100,7 +103,6 @@ local function assetLoadingPhase()
         updateProgress(3, 5, string.format("Loading %d%% - %s", percentage, assetName))
     end)
 
-    -- UPDATED: Call the new priority preload function
     spawn(function() AssetManager.preloadInitialAsync() end)
 
     preloadFinished.Event:Wait()

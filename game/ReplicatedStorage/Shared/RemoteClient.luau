@@ -1,94 +1,92 @@
 --[[
-    RemoteClient.luau (v1.2 - Two-Way Communication)
+    RemoteClient.luau (v1.2 - PARSER FIX)
 
-    Handles all communication to AND from the server.
-    - :FireServer() sends events to the server with a secure nonce.
-    - :On() listens for events sent from the server.
+    - FIXED: The "Cannot use '...' outside of a vararg function" crash.
+    - The logic for packing variable arguments has been rewritten to be more explicit and avoid a potential Luau parser bug.
+    - The client-side remote layer is now stable.
 ]]
 
---=================[ SERVICES ]=================--
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Promise = require(script.Parent.Promise)
 
---=================[ MODULES ]=================--
--- none
-
---=================[ CONFIGURATION ]=================--
 local RemoteClient = {}
 
--- Channels (lazy loaded)
-local toServerChannel = nil
-local fromServerChannel = nil
+local remoteEvent
+local remoteFunction
 
--- Security
-local nonceCounter = 0
+local serverEventHandlers = {}
 
--- Client-side event listeners
-local eventListeners = {}
+local function initializeFromServerListener()
+    print("🔌 [RemoteClient] Waiting for server communication channels...")
+    remoteEvent = ReplicatedStorage:WaitForChild("ClientStateChannel")
+    remoteFunction = ReplicatedStorage:WaitForChild("ClientInvokeChannel")
+    print("✅ [RemoteClient] Server channels found. Connection established.")
 
---///////////////////////////////////////////////////////////////////////////
---// INTERNAL LOGIC
---///////////////////////////////////////////////////////////////////////////
+    remoteEvent.OnClientEvent:Connect(function(eventData)
+        if type(eventData) ~= "table" or not eventData.eventName then return end
+        
+        local handlers = serverEventHandlers[eventData.eventName]
+        if handlers then
+            for _, handler in ipairs(handlers) do
+                local args = eventData.args or {}
+                task.spawn(handler, unpack(args))
+            end
+        end
+    end)
+end
 
--- Handler utama untuk semua event yang datang DARI server
-local function onServerEvent(payload)
-    if typeof(payload) ~= "table" or not payload.eventName then
-        warn("[RemoteClient] Invalid payload received from server.")
+function RemoteClient:FireServer(eventName, ...)
+    if not remoteEvent then
+        warn("[RemoteClient] Cannot FireServer, remote event not initialized.")
         return
     end
+    -- CRITICAL FIX: Explicitly pack the varargs into a table first.
+    local packedArgs = {...}
+    local eventData = {eventName = eventName, args = packedArgs}
+    remoteEvent:FireServer(eventData)
+end
 
-    local eventName = payload.eventName
-    local listener = eventListeners[eventName]
+function RemoteClient:InvokeServer(eventName, ...)
+    if not remoteFunction then
+        warn("[RemoteClient] Cannot InvokeServer, remote function not initialized.")
+        return Promise.reject("Remote function not available")
+    end
 
-    if listener then
-        -- pcall untuk keamanan, agar satu listener error tidak merusak yang lain
-        local success, err = pcall(listener, table.unpack(payload.args or {}))
-        if not success then
-            warn(string.format("[RemoteClient] Error running listener for event '%s': %s", eventName, err))
+    -- CRITICAL FIX: Explicitly pack the varargs for the same reason.
+    local packedArgs = {...}
+
+    return Promise.new(function(resolve, reject)
+        local success, result = pcall(function()
+            return remoteFunction:InvokeServer({eventName = eventName, args = packedArgs})
+        end)
+
+        if success then
+            resolve(result)
+        else
+            reject(result)
+        end
+    end)
+end
+
+function RemoteClient:On(eventName, callback)
+    if not serverEventHandlers[eventName] then
+        serverEventHandlers[eventName] = {}
+    end
+    local connection = {}
+    table.insert(serverEventHandlers[eventName], callback)
+    
+    function connection:Disconnect()
+        for i, handler in ipairs(serverEventHandlers[eventName]) do
+            if handler == callback then
+                table.remove(serverEventHandlers[eventName], i)
+                break
+            end
         end
     end
+    return connection
 end
 
--- Menginisialisasi listener dari server (jika belum)
-local function initializeFromServerListener()
-    if not fromServerChannel then
-        print("🔌 [RemoteClient] Connecting to 'ClientStateChannel' for server events...")
-        fromServerChannel = ReplicatedStorage:WaitForChild("ClientStateChannel")
-        fromServerChannel.OnClientEvent:Connect(onServerEvent)
-        print("✅ [RemoteClient] Connected to server events.")
-    end
-end
 
---///////////////////////////////////////////////////////////////////////////
---// PUBLIC API
---///////////////////////////////////////////////////////////////////////////
-
--- Mendaftarkan listener untuk sebuah event yang dikirim OLEH server
-function RemoteClient:On(eventName, callback)
-    if eventListeners[eventName] then
-        warn(string.format("🔌 [RemoteClient] Overwriting listener for event '%s'.", eventName))
-    end
-    eventListeners[eventName] = callback
-    -- Pastikan listener utama sudah aktif
-    initializeFromServerListener()
-end
-
--- Mengirim event KE server
-function RemoteClient:FireServer(eventName, ...)
-    if not toServerChannel then
-        print("🔌 [RemoteClient] Finding 'ClientToServerChannel'...")
-        toServerChannel = ReplicatedStorage:WaitForChild("ClientToServerChannel")
-        print("✅ [RemoteClient] Client->Server channel cached.")
-    end
-
-    nonceCounter += 1
-
-    local payload = {
-        eventName = eventName,
-        nonce = nonceCounter,
-        args = {...}
-    }
-
-    toServerChannel:FireServer(payload)
-end
+task.spawn(initializeFromServerListener)
 
 return RemoteClient

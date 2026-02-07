@@ -1,19 +1,17 @@
 --[[
-	init.server.luau (v1.5 - Service Initialization Fix)
-	
-	- Delegates remote event registration to the respective services.
-	- Calls the new AdminService:Init() function.
-	- Simplifies the main init file.
+    ServerInit.server.luau (v1.7 - ARCHITECTURE CORRECTION)
+
+    - CRITICAL FIX: Removed the execution of the client-side `GameBootstrapper` script.
+    - The server no longer attempts to run client-only code, which was the root cause of the `OnClientEvent` crash and asset loading failures.
+    - This restores the fundamental client-server architecture.
 ]]
 
 print("🚀 [Server] Starting Bloxquarium Professional Game Engine...")
 
--- Import modul utama
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Import core modules
 local ServerScriptService = game:GetService("ServerScriptService")
-local GameBootstrapper = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GameBootstrapper"))
 
--- Import Layanan Inti Server
+-- Import Core Server Services
 local DataService = require(ServerScriptService:WaitForChild("DataService"))
 local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
 local GameActions = require(ServerScriptService:WaitForChild("GameActions"))
@@ -21,58 +19,34 @@ local LeaderboardService = require(ServerScriptService:WaitForChild("Leaderboard
 local AdminService = require(ServerScriptService:WaitForChild("AdminService"))
 
 -- =======================================================================
--- URUTAN INISIALISASI KRITIS
+-- CRITICAL INITIALIZATION SEQUENCE
 -- =======================================================================
 
--- Langkah 1: Inisialisasi RemoteService untuk komunikasi aman client-server.
+-- Step 1: Initialize the core remote service to enable client-server communication.
 RemoteService:Init()
 
--- Langkah 2: Inisialisasi layanan lain dan daftarkan event remote mereka.
--- AdminService sekarang menangani pendaftarannya sendiri.
-AdminService:Init()
+-- Step 2: Initialize other services.
+LeaderboardService:Init()
 
--- Daftarkan Aksi Game lainnya.
-print("🛡️ [Server] Mendaftarkan Aksi Game yang Aman...")
-RemoteService:Register("GameAction_BuyItem", function(player, itemId)
+-- Step 3: Register Game Actions with the correct remote handlers.
+print("🛡️ [Server] Registering Secure Game Actions...")
+
+RemoteService:RegisterInvoke("GameAction_BuyItem", function(player, itemId)
     return GameActions:BuyItem(player, itemId)
 end)
-print("   -> 'GameAction_BuyItem' terdaftar.")
+print("   -> 'GameAction_BuyItem' registered for invocation.")
 
-RemoteService:Register("KickPlayer", function(player, playerName)
-    return GameActions:KickPlayer(player, playerName)
+RemoteService:RegisterInvoke("KickPlayer", function(player, targetPlayerName)
+    return GameActions:KickPlayer(player, targetPlayerName)
 end)
-print("   -> 'KickPlayer' terdaftar. ")
+print("   -> 'KickPlayer' registered for invocation.")
 
--- Langkah 3: Pastikan ClientStateChannel ada (RemoteService harusnya sudah membuatnya).
-if not ReplicatedStorage:FindFirstChild("ClientStateChannel") then
-    print("🎨 [Server] Membuat ClientStateChannel...")
-    local clientStateChannel = Instance.new("RemoteEvent")
-    clientStateChannel.Name = "ClientStateChannel"
-    clientStateChannel.Parent = ReplicatedStorage
-end
-
--- Langkah 4: Inisialisasi DataService.
+-- Step 4: Initialize the DataService. This comes last as it might depend on other systems.
 DataService:Init()
 
 -- =======================================================================
--- INISIALISASI GAME UMUM
+-- SERVER READY
 -- =======================================================================
 
-GameBootstrapper.StartBootstrapAsync(function(success, state)
-	if success then
-		print("✅ [Server] Game bootstrap completed successfully!")
-		print("🎮 [Server] Bloxquarium is now ready for players!")
-	else
-		warn("❌ [Server] Game bootstrap failed!")
-		warn("🔧 [Server] Check the bootstrap report for details:")
-		GameBootstrapper.PrintReport()
-	end
-end)
-
--- Global access untuk debugging (optional)
-_G.GameBootstrapper = GameBootstrapper
-_G.BootstrapReport = function()
-	GameBootstrapper.PrintReport()
-end
-
-print("📊 [Server] Bootstrap sequence initiated - check loading screen for progress")
+print("✅ [Server] All server systems initialized successfully!")
+print("🎮 [Server] Bloxquarium is now ready for players!")

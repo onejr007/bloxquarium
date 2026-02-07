@@ -1,224 +1,115 @@
-# 🚀 Quick Start Guide - Bloxquarium
+# 🚀 Panduan Memulai Cepat - Bloxquarium (v2)
 
-Panduan cepat untuk mulai menggunakan struktur folder Roblox Explorer dengan Rojo.
+Panduan cepat untuk mulai menggunakan arsitektur layanan modular baru proyek.
 
-## 📂 Dimana Menempatkan Script?
+## 📂 Di Mana Menempatkan Skrip?
 
-### Server Scripts (Berjalan di Server)
+### Skrip Server (Sekarang sebagai Layanan)
+
+Semua logika sisi server sekarang dienkapsulasi dalam **Modul Layanan**. Modul-modul ini berada di dalam direktori `Services` dan dimuat secara otomatis oleh `ServiceLoader`.
+
 ```
 📁 game/ServerScriptService/
-├── 📄 MyScript.server.luau        # Server script utama
-├── 📄 DataHandler.server.luau     # Handle data player
-├── 📁 Systems/                    # Folder untuk sistem
-│   ├── 📄 Economy.server.luau     # Sistem ekonomi
-│   └── 📄 Combat.server.luau      # Sistem combat
-└── 📄 README.md                   # Dokumentasi
+├── 📄 ServerInit.server.luau    # Titik masuk utama (sebaiknya jangan diubah)
+├── 📄 ServiceLoader.luau        # Memuat dan menginisialisasi semua layanan
+├── 📁 Services/                 # FOLDER UNTUK SEMUA MODUL LAYANAN ANDA
+│   ├── 📄 DataService.luau       # Layanan data yang sudah ada
+│   ├── 📄 GameActions.luau      # Layanan tindakan game yang sudah ada
+│   └── 📄 MyNewService.luau     # Di sini Anda menempatkan layanan baru Anda
+└── 📄 README.md                 # Dokumentasi
 ```
 
-### Client Scripts (Berjalan di Player)
+### Skrip Klien (Berjalan di Pemain)
+Struktur ini tidak berubah.
 ```
 📁 game/StarterPlayer/StarterPlayerScripts/
-├── 📄 MainClient.client.luau      # Client script utama
-├── 📄 InputHandler.client.luau    # Handle input player
-├── 📁 UI/                         # Folder untuk UI scripts
-│   ├── 📄 MainMenu.client.luau    # Menu utama
-│   └── 📄 HUD.client.luau         # HUD game
-└── 📄 README.md                   # Dokumentasi
+├── 📄 MainClient.client.luau      # Skrip klien utama
+└── 📁 UI/                         # Folder untuk skrip UI
 ```
 
-### GUI Elements
-```
-📁 game/StarterPlayer/StarterGui/
-├── 📄 MainGui.client.luau         # GUI script
-├── 📁 Menus/                      # Folder untuk menu
-│   ├── 📄 SettingsMenu.luau       # Menu settings
-│   └── 📄 ShopMenu.luau           # Menu shop
-└── 📄 README.md                   # Dokumentasi
-```
-
-### Shared Modules (Diakses Server & Client)
+### Modul Bersama (Dapat Diakses oleh Server & Klien)
+Struktur ini tidak berubah.
 ```
 📁 game/ReplicatedStorage/
-├── 📁 Shared/                     # Modules yang bisa diakses semua
-│   ├── 📄 AssetManager.luau       # Asset system (sudah ada)
-│   ├── 📄 Utils.luau              # Utility functions
-│   ├── 📄 Constants.luau          # Game constants
-│   └── 📄 Config.luau             # Game configuration
-└── 📄 README.md                   # Dokumentasi
+└── 📁 Shared/                     # Modul yang dapat diakses oleh semua
+    ├── 📄 AssetManagerV3.luau      # Sistem aset
+    └── 📄 RemoteClient.luau       # Modul remote klien
 ```
 
-### Loading Scripts (Load Pertama)
-```
-📁 game/ReplicatedFirst/
-├── 📄 LoadingScreen.client.luau   # Loading screen
-├── 📄 PreLoader.client.luau       # Pre-load assets
-└── 📄 README.md                   # Dokumentasi
-```
+---
 
-### Game World Objects
-```
-📁 game/Workspace/
-├── 📄 SpawnLocation.luau          # Spawn point
-├── 📁 Buildings/                  # Folder untuk bangunan
-│   ├── 📄 Shop.luau               # Toko
-│   └── 📄 Bank.luau               # Bank
-└── 📄 README.md                   # Dokumentasi
-```
+## 🎯 Alur Kerja Baru: Membuat Layanan Server
 
-### Assets (Models, Sounds, Images)
-```
-📁 assets/
-├── 📁 models/                     # Model files
-│   ├── 📄 Tree.rbxm               # Model pohon
-│   └── 📄 House.rbxm              # Model rumah
-├── 📁 sounds/                     # Audio files
-│   ├── 📄 BGM.mp3                 # Background music
-│   └── 📄 Click.ogg               # Click sound
-├── 📁 images/                     # Image files
-│   ├── 📄 Logo.png                # Game logo
-│   └── 📄 Icon.jpg                # Game icon
-└── 📁 animations/                 # Animation files
-    └── 📄 Walk.rbxm               # Walk animation
-```
+Alih-alih membuat `Script` biasa, Anda sekarang akan membuat `ModuleScript` di dalam folder `Services`.
 
-## 🎯 Contoh Workflow
+### 1. Buat File Modul Layanan Baru
+Buat file baru di `game/ServerScriptService/Services/MyNewService.luau`.
 
-### 1. Membuat Server Script Baru
 ```lua
--- 📁 game/ServerScriptService/PlayerManager.server.luau
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- 📁 game/ServerScriptService/Services/MyNewService.luau
+local MyNewService = {}
 
--- Import shared modules
-local AssetManager = require(ReplicatedStorage.Shared.AssetManager)
-local Utils = require(ReplicatedStorage.Shared.Utils)
+-- Dependensi apa pun yang Anda butuhkan dapat diteruskan di sini
+function MyNewService:Init(RemoteService) 
+    print("🚀 [MyNewService] Inisialisasi...")
 
-Players.PlayerAdded:Connect(function(player)
-    print("Player joined:", player.Name)
-    
-    -- Spawn welcome asset
-    AssetManager.Spawn("WelcomeSign", Vector3.new(0, 10, 0))
-end)
-```
-
-### 2. Membuat Client Script Baru
-```lua
--- 📁 game/StarterPlayer/StarterPlayerScripts/InputManager.client.luau
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
--- Import shared modules
-local Utils = require(ReplicatedStorage.Shared.Utils)
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.E then
-        print("Player pressed E!")
-        -- Do something
+    -- Contoh mendaftarkan remote invoke
+    if RemoteService then
+        RemoteService:RegisterInvoke("MyAction", function(player, ...)
+            return "Hello, " .. player.Name
+        end)
     end
-end)
+end
+
+function MyNewService:DoSomething()
+    print("Melakukan sesuatu yang hebat!")
+end
+
+return MyNewService
 ```
 
-### 3. Membuat Shared Module Baru
+### 2. Daftarkan Layanan Anda di ServiceLoader
+Buka `game/ServerScriptService/ServiceLoader.luau` dan tambahkan nama layanan baru Anda ke tabel `INIT_ORDER`. Urutan itu penting!
+
 ```lua
--- 📁 game/ReplicatedStorage/Shared/Utils.luau
-local Utils = {}
+-- 📄 ServiceLoader.luau
 
-function Utils.FormatNumber(number)
-    return string.format("%.2f", number)
-end
+-- ... (kode yang ada)
 
-function Utils.GetRandomColor()
-    return Color3.new(math.random(), math.random(), math.random())
-end
+local INIT_ORDER = {
+    "WorldService",
+    "RemoteService",
+    "LeaderboardService",
+    "GameActions",
+    "DataService",
+    "AdminService",
+    "MyNewService" -- TAMBAHKAN LAYANAN BARU ANDA DI SINI
+}
 
-function Utils.WaitForChild(parent, childName, timeout)
-    timeout = timeout or 5
-    local startTime = tick()
-    
-    while not parent:FindFirstChild(childName) do
-        if tick() - startTime > timeout then
-            warn("Timeout waiting for child:", childName)
-            return nil
-        end
-        wait(0.1)
-    end
-    
-    return parent:FindFirstChild(childName)
-end
-
-return Utils
+-- ... (sisa kode)
 ```
 
-### 4. Menggunakan Assets
-```lua
--- Dari script manapun
-local AssetManager = require(game.ReplicatedStorage.Shared.AssetManager)
+### 3. Selesai!
+Itu saja! `ServiceLoader` akan secara otomatis memuat dan menginisialisasi layanan baru Anda saat server dimulai. Jika layanan Anda membutuhkan `RemoteService`, `ServiceLoader` akan secara otomatis menyuntikkannya.
 
--- Spawn model
-local tree = AssetManager.Clone("Tree")
-tree.Parent = workspace
-tree.Position = Vector3.new(10, 0, 10)
+---
 
--- Play sound
-local sound = game.ReplicatedStorage.Assets.Sounds.BGM
-sound:Play()
-```
+## ⚡ Perintah Rojo
 
-## ⚡ Commands Rojo
+Perintah-perintah ini tidak berubah.
 
-### Build Project
+### Build Proyek
 ```bash
 rojo build -o "bloxquarium.rbxlx"
 ```
 
-### Start Development Server
+### Mulai Server Pengembangan
 ```bash
 rojo serve
 ```
 
-### Build untuk Production
-```bash
-rojo build -o "bloxquarium_release.rbxlx"
-```
+## 🎮 Siap untuk Mengkode!
 
-## 🔧 Tips & Tricks
+Sekarang Anda siap untuk mulai mengkode menggunakan arsitektur layanan yang baru dan lebih baik! Struktur ini dirancang untuk menjaga agar kode Anda tetap teratur dan mudah dikelola.
 
-### 1. Naming Convention
-- **Server Scripts**: `NamaScript.server.luau`
-- **Client Scripts**: `NamaScript.client.luau`
-- **Modules**: `NamaModule.luau`
-- **Folders**: `PascalCase` (contoh: `PlayerSystems`)
-
-### 2. Organisasi Folder
-- Gunakan folder untuk mengelompokkan script berdasarkan fitur
-- Buat README.md di setiap folder untuk dokumentasi
-- Pisahkan server dan client logic dengan jelas
-
-### 3. Import Modules
-```lua
--- Selalu gunakan path lengkap untuk clarity
-local AssetManager = require(game.ReplicatedStorage.Shared.AssetManager)
-local Utils = require(game.ReplicatedStorage.Shared.Utils)
-```
-
-### 4. Error Handling
-```lua
--- Gunakan pcall untuk error handling
-local success, result = pcall(function()
-    return AssetManager.Clone("MyModel")
-end)
-
-if success then
-    result.Parent = workspace
-else
-    warn("Failed to clone model:", result)
-end
-```
-
-## 🎮 Ready to Code!
-
-Sekarang Anda sudah siap untuk mulai coding! Struktur folder sudah siap dan Rojo akan otomatis mapping semua file ke tempat yang tepat di Roblox Studio.
-
-**Happy Coding! 🚀**
+**Selamat Mengkode! 🚀**

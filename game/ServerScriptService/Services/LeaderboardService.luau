@@ -1,15 +1,14 @@
 --[[
-    LeaderboardService.luau (v1.5 - COMPATIBILITY FIX)
+    LeaderboardService.luau (v1.6 - Dependency Injection)
 
-    - This version fixes the breaking changes introduced by the `DataService` rewrite.
-    - It now calls the correct function: `DataService:Get(player)` instead of the old `:GetPlayerData()`.
-    - It correctly listens to the `StateUpdated` event and handles its new argument signature.
+    - Refactored to accept DataService via the Init method.
+    - Removed all hardcoded `require` paths.
 ]]
 
 local Players = game:GetService("Players")
-local ServerScriptService = game:GetService("ServerScriptService")
 
-local DataService = require(ServerScriptService.DataService)
+-- Service will be injected by ServiceLoader
+local InjectedDataService
 
 local LeaderboardService = {}
 
@@ -32,43 +31,47 @@ local function createLeaderstat(player)
 end
 
 local function updateLeaderboard(player, playerData)
-    -- Add a safety check in case this is called before data is ready
     if not player or not playerData then return end
     
     local leaderstats = player:FindFirstChild("leaderstats")
     if not leaderstats then
-        warn("Leaderstats not found for player: " .. player.Name)
+        -- It's possible the leaderstats haven't been created yet, so don't warn.
         return
     end
 
     if leaderstats:FindFirstChild("Coins") then
-        leaderstats.Coins.Value = playerData.Coins or 0 -- Property names are case-sensitive
+        leaderstats.Coins.Value = playerData.Coins or 0
     end
 
     if leaderstats:FindFirstChild("Level") then
-        leaderstats.Level.Value = playerData.Level or 0 -- Property names are case-sensitive
+        leaderstats.Level.Value = playerData.Level or 0
     end
 end
 
-function LeaderboardService:Init()
-    print("✅ [LeaderboardService v1.5] Service initialized and reactive.")
+function LeaderboardService:Init(DataService)
+    InjectedDataService = DataService -- Dependency Injection
+
+    if not InjectedDataService then
+        warn("🔥 [LeaderboardService] DataService not provided. Leaderboards will not function.")
+        return
+    end
+
+    print("✅ [LeaderboardService v1.6] Service initialized and reactive.")
 
     Players.PlayerAdded:Connect(function(player)
         print("🏆 [Leaderboard] Setting up for " .. player.Name .. "...")
         createLeaderstat(player)
         
-        -- FIXED: Use the new, correct function name `Get`
-        local initialData = DataService:Get(player)
+        local initialData = InjectedDataService:Get(player)
         if initialData then
             updateLeaderboard(player, initialData)
         end
     end)
 
-    -- FIXED: Correctly connect to the event and use the new `player` argument
-    DataService.StateUpdated:Connect(function(player)
+    InjectedDataService.StateUpdated:Connect(function(player)
         if player then
             print("🏆 [Leaderboard] Data changed for " .. player.Name .. ". Updating stats.")
-            local playerData = DataService:Get(player)
+            local playerData = InjectedDataService:Get(player)
             updateLeaderboard(player, playerData)
         end
     end)

@@ -1,11 +1,13 @@
 --[[
-	ClientManager.client.luau (v1.2 - Final Correction)
+	ClientManager.client.luau (v1.4 - Handshake Fix)
 
-	- This version corrects the multiple cascading errors caused by my misreading of the AssetManager API.
-	- It REINSTATES the correct Promise-based pattern for `syncWithServerAsync`.
-	- It REMOVES the hallucinated `SyncComplete` event listener that was causing the crash.
-	- This aligns the manager with the TRUE API of AssetManagerV3.luau, which I have now read.
-	- My deepest apologies for the confusion and wasted time.
+	- FIXES the loading screen getting stuck forever.
+	- The previous logic had a race condition where the server could send the "WorldReady" signal before the client was ready to listen for it.
+	- This version implements a robust client-server handshake:
+	    1. The client connects all of its event listeners as before.
+	    2. It then fires a NEW event to the server: "ClientReady".
+	    3. The server will now only send "WorldReady" AFTER it receives "ClientReady".
+	- This guarantees the signal is never missed.
 ]]
 
 -- Services
@@ -19,11 +21,11 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Shared Modules
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local AssetManager = require(Shared:WaitForChild("AssetManagerV3")) -- Correct filename
+local AssetManager = require(Shared:WaitForChild("AssetManagerV3"))
 local RemoteClient = require(Shared:WaitForChild("RemoteClient"))
 local ClientState = require(Shared:WaitForChild("ClientState"))
 
-print("🚀 [ClientManager v1.2] Final attempt at a stable client manager.")
+print("🚀 [ClientManager v1.4] Implementing client-server handshake.")
 
 -- =======================================================================
 -- 1. UI CREATION (Unchanged)
@@ -33,7 +35,7 @@ local screenGui, backgroundFrame, progressFill, progressText, phaseLabel
 local loadingState = { assetsReady = false, worldReady = false }
 
 local function createLoadingUI()
-	print("🎨 [ClientManager v1.2] Creating professional loading UI...")
+	print("🎨 [ClientManager v1.4] Creating professional loading UI...")
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "LoadingScreen"
 	screenGui.ResetOnSpawn = false
@@ -111,7 +113,7 @@ local function createLoadingUI()
 	progressText.Font = Enum.Font.GothamMedium
 	progressText.Parent = progressFrame
 	screenGui.Parent = playerGui
-	print("✅ [ClientManager v1.2] UI created and parented successfully.")
+	print("✅ [ClientManager v1.4] UI created and parented successfully.")
 end
 
 -- =======================================================================
@@ -133,7 +135,7 @@ end
 
 local function checkCompletionAndHide()
 	if loadingState.assetsReady and loadingState.worldReady then
-		print("✅ [ClientManager v1.2] All systems go. Hiding loading screen.")
+		print("✅ [ClientManager v1.4] All systems go. Hiding loading screen.")
 		updatePhase("Welcome to Bloxquarium!")
 		task.wait(1.0)
 		local fadeInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -146,41 +148,47 @@ local function checkCompletionAndHide()
 end
 
 -- =======================================================================
--- 3. INITIALIZATION SEQUENCE (Corrected)
+-- 3. INITIALIZATION SEQUENCE (HANDSHAKE LOGIC)
 -- =======================================================================
 
 createLoadingUI()
 
-print("🔌 [ClientManager v1.2] Connecting to engine events...")
+print("🔌 [ClientManager v1.4] Connecting to engine events...")
 
--- Connect to the VALID events that actually exist
+-- Listen for events from other modules
 AssetManager.PhaseChanged:Connect(updatePhase)
 AssetManager.PreloadProgress:Connect(updateProgress)
+
 AssetManager.PreloadComplete:Connect(function(loaded, total)
-	print("✅ [ClientManager v1.2] Asset preloading complete.")
+	print("✅ [ClientManager v1.4] Asset preloading complete.")
 	updateProgress(total, total)
 	loadingState.assetsReady = true
 	checkCompletionAndHide()
 end)
 
+-- **HANDSHAKE STEP 2:** The server will send this *after* we tell it we're ready.
 RemoteClient:On("WorldReady", function()
-	print("✅ [ClientManager v1.2] 'WorldReady' signal received from server.")
+	print("✅ [ClientManager v1.4] 'WorldReady' signal received from server.")
 	loadingState.worldReady = true
-
-    print("▶️ [ClientManager v1.2] Starting asset sync and preload.")
-    -- REINSTATED: The correct, Promise-based pattern.
-    AssetManager.syncWithServerAsync():andThen(function(success)
-        if success then
-            -- This is the correct place to call preload
-            AssetManager.preloadInitialAsync()
-        else
-            updatePhase("❌ CRITICAL ERROR: Could not sync with server.")
-        end
-    end)
+	checkCompletionAndHide()
 end)
 
 ClientState:OnChange(function(newState)
 	-- Ready to receive state changes.
 end)
 
-print("✅ [ClientManager v1.2] Client systems are configured. Waiting for server signal.")
+-- Start the asset loading process in the background
+AssetManager.syncWithServerAsync():andThen(function(success)
+    if success then
+        AssetManager.preloadInitialAsync()
+    else
+        updatePhase("❌ CRITICAL ERROR: Could not sync with server.")
+    end
+end)
+
+print("✅ [ClientManager v1.4] Client systems configured. Notifying server.")
+
+-- **HANDSHAKE STEP 1:** Tell the server we are now ready to receive events.
+RemoteClient:FireServer("ClientReady")
+
+print("⏳ [ClientManager v1.4] Waiting for tasks and server handshake to complete.")

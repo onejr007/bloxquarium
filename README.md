@@ -1,75 +1,55 @@
-# Dokumentasi Teknis Bloxquarium
+# Dokumentasi Teknis Bloxquarium (v2 - Arsitektur yang Direvisi)
 
-Dokumen ini menguraikan arsitektur teknis proyek Bloxquarium. Sistem ini dirancang untuk ketahanan dan skalabilitas, menampilkan model penyimpanan data hibrida dan alur manajemen aset yang kuat.
+Dokumen ini menguraikan arsitektur teknis yang direvisi dari proyek Bloxquarium. Sistem ini telah difaktorkan ulang untuk meningkatkan modularitas, mengurangi ketergantungan, dan menyederhanakan alur kerja pengembangan melalui pengenalan pemuat layanan terpusat.
 
 ## Tinjauan Arsitektur
 
-Arsitektur server dibangun di sekitar serangkaian layanan modular yang masing-masing menangani tanggung jawab tertentu. Logika inti berkisar pada pemuatan, pengelolaan, dan penyimpanan data pemain dan aset game.
+Arsitektur server yang baru berpusat pada direktori `Services` dan `ServiceLoader` terpusat. Setiap fungsionalitas inti (misalnya, data, admin, tindakan game) dienkapsulasi dalam modul Layanannya sendiri. Pemuat menangani penemuan, inisialisasi, dan injeksi dependensi, menciptakan sistem yang sangat dapat dipelihara.
 
-- **Penyimpanan Data**: Sistem menggunakan pendekatan hibrida. **Firebase Realtime Database** adalah penyimpanan data utama, sedangkan **Roblox DataStore** berfungsi sebagai cadangan yang andal.
-- **Manajemen Aset**: Aset game dikelola melalui alur sinkronisasi klien-server untuk memastikan bahwa pemain hanya memuat apa yang mereka butuhkan, saat mereka membutuhkannya.
-- **Komunikasi**: Klien dan server berkomunikasi melalui `RemoteClient` dan `RemoteServer` (tidak dianalisis secara langsung tetapi diinferensikan), yang memfasilitasi pengambilan data dan aset.
-
----
-
-## Layanan & Modul Utama
-
-### 1. `DataService` (v3.3)
-
-- **Tanggung Jawab**: Merupakan pusat utama untuk semua data pemain. Layanan ini mengelola cache data sesi pemain, menangani logika pemuatan/penyimpanan, dan menyediakan API untuk layanan lain untuk berinteraksi dengan data pemain.
-- **Fitur Utama**:
-    - **Pemuatan Hibrida**: Mencoba memuat data dari `FirebaseService` terlebih dahulu, dan jika gagal, beralih ke `DatabaseService` (DataStore).
-    - **Cache Sesi**: Menyimpan data semua pemain yang sedang online dalam tabel Lua untuk akses cepat.
-    - **Perbaikan Panel Admin (v3.3)**: Menyertakan fungsi `UpdatePlayerData` yang penting untuk memungkinkan admin mengedit data pemain tanpa menimpa seluruh catatan mereka, memperbaiki kerusakan server sebelumnya.
-
-### 2. `FirebaseService` (v2.1)
-
-- **Tanggung Jawab**: Pembungkus tingkat rendah untuk panggilan API REST Firebase Realtime Database. Ini mengabstraksi permintaan HTTP `GET` (mengambil) dan `PUT` (menyimpan).
-- **Konteks Historis (v2.1)**: Versi ini berisi penambahan *debugging* yang signifikan, yang menunjukkan bahwa masalah pemuatan data dari Firebase adalah masalah kritis di masa lalu. Layanan ini sekarang stabil tetapi mempertahankan log ini untuk diagnostik.
-
-### 3. `DatabaseService` (v1.2)
-
-- **Tanggung Jawab**: Pembungkus yang stabil dan andal untuk `DataStoreService` Roblox.
-- **Fitur Utama**:
-    - **API CRUD Dasar**: Menyediakan fungsi `Create`, `Read`, `Update`, dan `Delete`.
-    - **Penanganan Error yang Benar**: Komentar menekankan bahwa layanan ini dengan benar mengembalikan pasangan `success, result`, menjadikannya fondasi yang dapat diandalkan untuk `DataService`.
-
-### 4. `AssetManagerV3` (v3.2 - Klien)
-
-- **Tanggung Jawab**: Mengelola, mem-preload, dan menyediakan akses ke semua aset game di sisi klien.
-- **Fitur Utama**:
-    - **Sinkronisasi Server**: Saat memulai, ia meminta daftar aset lengkap dari server.
-    - **Preloading Kritis**: Secara khusus mem-preload aset yang terdaftar di `CriticalAssetNames` (dari `asset_config`) sebelum mengizinkan game untuk melanjutkan, memastikan aset UI/suara penting tersedia segera.
-    - **Perbaikan Struktur (v3.2)**: Memperbaiki bug kritis di mana manajer salah membaca tabel aset, yang menyebabkan kegagalan preloading.
-
-### 5. `asset_config.luau` (v2 - Server)
-
-- **Tanggung Jawab**: Sumber kebenaran tunggal untuk semua definisi aset di server.
-- **Fitur Utama**:
-    - **Daftar Aset Terpusat**: Mendefinisikan ID untuk semua gambar, suara, model, dll.
-    - **Daftar Preload Eksplisit**: Berisi tabel `CriticalAssetNames` yang secara eksplisit memberitahu `AssetManagerV3` aset mana yang harus dimuat saat startup.
-    - **Perbaikan Struktur (v2)**: Direstrukturisasi untuk menghindari penimpaan kunci Lua, yang sebelumnya menyebabkan daftar aset yang tidak lengkap dikirim ke klien.
+- **Penyimpanan Data**: Tidak berubah. Sistem ini masih menggunakan pendekatan hibrida di mana **Firebase Realtime Database** berfungsi sebagai penyimpanan data utama, dan **Roblox DataStore** berfungsi sebagai cadangan yang kuat.
+- **Struktur Layanan**: Semua layanan server sekarang berada di `game/ServerScriptService/Services`. Titik masuk server utama (`ServerInit.server.luau`) mendelegasikan semua inisialisasi ke `ServiceLoader`.
+- **Manajemen Dependensi**: Ketergantungan antar layanan (seperti `RemoteService` yang dibutuhkan oleh layanan lain) dikelola melalui **Dependency Injection**. `ServiceLoader` bertanggung jawab untuk meneruskan instance layanan yang diperlukan selama inisialisasi.
 
 ---
 
-## Alur Data
+## Komponen Inti
 
-### Alur Pemuatan Data Pemain (Saat Bergabung)
+### 1. `ServiceLoader` (Baru)
 
-1.  Pemain bergabung dengan game.
-2.  `DataService` dipicu.
-3.  `DataService` memanggil `FirebaseService.GetPlayerDataAsync`.
-    - **Jika Berhasil**: Data dimuat ke dalam `sessionCache`. Cadangan di `DataStore` diperbarui.
-    - **Jika Gagal**: `DataService` memanggil `DatabaseService.Read` untuk mencoba memuat dari cadangan DataStore.
-        - **Jika Berhasil (Cadangan)**: Data dimuat ke dalam `sessionCache`.
-        - **Jika Gagal (Cadangan)**: `DataService` membuat data pemain default baru (`getDefaultPlayerData`) dan menyimpannya di `sessionCache`. Cadangan awal dibuat di `DataStore`.
-4.  Acara `StateUpdated` diaktifkan, memberi sinyal kepada bagian lain dari game (seperti UI) bahwa data pemain siap.
+- **Tanggung Jawab**: Merupakan inti dari arsitektur server. Ia bertanggung jawab untuk:
+    1.  **Memuat Modul**: Memuat (`require`) semua modul Layanan yang ditentukan dalam urutan yang telah ditentukan sebelumnya.
+    2.  **Menginisialisasi Layanan**: Memanggil metode `:Init()` pada setiap layanan dalam urutan yang benar.
+    3.  **Menyuntikkan Dependensi**: Meneruskan instance layanan penting (seperti `RemoteService`) ke layanan yang bergantung padanya.
+- **Alur Kerja**: `ServerInit.server.luau` memanggil `ServiceLoader:Init()` satu kali saat startup, yang memulai seluruh urutan inisialisasi server.
 
-### Alur Pemuatan Aset (Saat Klien Memulai)
+### 2. `ServerInit.server.luau` (Disederhanakan)
 
-1.  Klien memulai dan menginisialisasi `AssetManagerV3`.
-2.  `AssetManagerV3` memanggil `RemoteClient:InvokeServer("GetAssetRegistry")`.
-3.  Server merespons dengan seluruh tabel konfigurasi dari `asset_config.luau`.
-4.  `AssetManagerV3` mengurai tabel ini, mendaftarkan semua aset, dan mengidentifikasi aset penting dari daftar `CriticalAssetNames`.
-5.  Fungsi `preloadInitialAsync` dipanggil, menggunakan `ContentProvider:PreloadAsync` pada semua aset penting.
-6.  `AssetManager.PreloadComplete` diaktifkan, memberi sinyal pada layar pemuatan untuk selesai.
+- **Tanggung Jawab**: Sekarang hanya bertindak sebagai titik masuk utama untuk server.
+- **Fungsi**: Tugas utamanya adalah memuat `ServiceLoader` dan memulai proses inisialisasi. Ia juga terus menangani logika `PlayerAdded` untuk memberi tahu klien ketika dunia siap.
+
+### 3. Modul Layanan (misalnya, `DataService`, `GameActions`, `AdminService`)
+
+- **Tanggung Jawab**: Setiap layanan sekarang sepenuhnya mandiri dan menerima dependensinya melalui metode `Init(dependensi)`. Misalnya, `GameActions` tidak lagi memuat `RemoteService` secara langsung; sebaliknya, `ServiceLoader` meneruskannya.
+- **Contoh: Pendaftaran Mandiri**:
+    - `GameActions:Init(RemoteService)` menerima `RemoteService` dan menggunakannya untuk mendaftarkan *remote invokes* seperti `GameAction_BuyItem`.
+    - `AdminService:Init(RemoteService)` menerima `RemoteService` dan menggunakannya untuk mendaftarkan *remote event* `RequestAdminCheck`.
+    - Ini memastikan bahwa modul yang mendefinisikan suatu perilaku juga bertanggung jawab untuk mengeksposnya, bukan logika eksternal.
+
+---
+
+## Alur Inisialisasi Server
+
+1.  `ServerInit.server.luau` dieksekusi saat server dimulai.
+2.  Ia memuat dan memanggil `ServiceLoader:Init()`.
+3.  `ServiceLoader` melintasi daftar `INIT_ORDER` yang telah ditentukan sebelumnya:
+    a. Ia memuat (`require`) setiap modul Layanan.
+    b. Ia memanggil metode `:Init()` pada setiap layanan, menyuntikkan `RemoteService` ke dalam `GameActions` dan `AdminService`.
+4.  Setiap layanan menginisialisasi logikanya sendiri. Layanan seperti `GameActions` dan `AdminService` menggunakan instance `RemoteService` yang disediakan untuk mendaftarkan *remote events* dan *invokes* mereka.
+5.  Setelah `ServiceLoader` selesai, `ServerInit` melanjutkan untuk memberi tahu pemain yang ada dan yang baru bahwa dunia siap.
+
+## Keuntungan dari Arsitektur Baru
+
+- **Ketergantungan Rendah**: Layanan tidak lagi terikat erat satu sama lain atau ke skrip inisialisasi pusat.
+- **Pemeliharaan yang Ditingkatkan**: Menambah, menghapus, atau mengonfigurasi ulang layanan sekarang sebagian besar dilakukan di `ServiceLoader`, sehingga lebih mudah untuk mengelola proyek.
+- **Dependensi yang Jelas**: Pola *dependency injection* membuat sangat jelas layanan mana yang dibutuhkan oleh yang lain.
+- **Testabilitas yang Lebih Baik**: Layanan dapat diuji secara terpisah dengan lebih mudah dengan menyediakan versi tiruan dari dependensinya selama pengujian.

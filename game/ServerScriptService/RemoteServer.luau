@@ -1,10 +1,10 @@
 --[[
-    RemoteServer.luau (v1.0 - CORE MODULE)
+    RemoteServer.luau (v1.3 - Definitive Packager Fix)
 
-    - This is the missing core module for the server-side remote event handling.
-    - It creates and manages a central communication channel (`ClientStateChannel`).
-    - Provides clean `On`, `OnInvoke`, `FireClient`, and `FireAllClients` methods.
-    - This fixes the "RemoteServer is not a valid member" crash.
+    - This version definitively fixes the `unpack` error by correctly handling all argument types.
+    - It changes the function signature to use varargs (`...`) to capture any and all arguments passed to it.
+    - It then explicitly packs these arguments into a table, ensuring that single booleans, nils, or other types don't break the client-side parser.
+    - This module is now solely responsible for data packaging, creating a robust and predictable communication channel.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -37,15 +37,23 @@ function RemoteServer:OnInvoke(eventName, callback)
     clientInvokeHandlers[eventName] = callback
 end
 
-function RemoteServer:FireClient(player, ...)
+-- ## THE DEFINITIVE FIX ##
+function RemoteServer:FireClient(player, eventName, ...)
     if remoteEvent then
-        remoteEvent:FireClient(player, ...)
+        -- Capture all variable arguments into a single, safe table.
+        local packedArgs = {...}
+        -- Build the payload in the exact format the client expects.
+        local payload = {eventName = eventName, args = packedArgs}
+        remoteEvent:FireClient(player, payload)
     end
 end
 
-function RemoteServer:FireAllClients(...)
+function RemoteServer:FireAllClients(eventName, ...)
     if remoteEvent then
-        remoteEvent:FireAllClients(...)
+        -- Apply the same robust logic for FireAllClients.
+        local packedArgs = {...}
+        local payload = {eventName = eventName, args = packedArgs}
+        remoteEvent:FireAllClients(payload)
     end
 end
 
@@ -58,13 +66,7 @@ local function onClientEvent(player, eventData)
     local handlers = clientEventHandlers[eventData.eventName]
     if handlers then
         for _, handler in ipairs(handlers) do
-            -- Unpack the arguments, excluding the eventName itself
-            local args = {}
-            if eventData.args then
-                for i=1, #eventData.args do
-                    table.insert(args, eventData.args[i])
-                end
-            end
+            local args = eventData.args or {}
             task.spawn(handler, player, unpack(args))
         end
     end

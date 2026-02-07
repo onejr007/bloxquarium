@@ -1,45 +1,54 @@
 # ReplicatedStorage
 
-Folder ini berisi semua shared resources yang bisa diakses dari server dan client.
+Folder ini berisi semua sumber daya bersama yang perlu diakses oleh **baik Klien maupun Server**.
 
-## Struktur:
-- `Shared/` - ModuleScripts yang bisa di-require dari server dan client
-- `Assets/` - Asset files (models, sounds, images, animations)
+## Struktur Penting
 
-## Contoh Penggunaan:
+- **`Shared/`**: Direktori ini berisi modul `ModuleScript` yang dapat digunakan di mana saja.
+    - **`RemoteClient.luau`**: Modul KLIEN yang paling penting. Ini adalah satu-satunya cara klien harus berkomunikasi dengan server. Ia menyediakan metode `.invoke()` dan `.fire()` yang menyederhanakan pengiriman permintaan ke `RemoteService` di server.
+    - **`AssetManagerV3.luau`**: Modul bersama untuk mengelola dan memuat aset game.
 
-### Shared Module
+- **`Assets/`**: Direktori ini menampung aset bersama seperti Model, Suara, dan Animasi yang perlu diakses saat runtime.
+
+---
+
+## Alur Kerja: Komunikasi Klien-ke-Server
+
+Klien **TIDAK BOLEH** menggunakan `RemoteEvent` atau `RemoteFunction` secara langsung. Sebaliknya, mereka harus menggunakan modul `RemoteClient`.
+
+### Contoh: Memanggil Fungsi Server dari Skrip Klien
+
+Asumsikan ada layanan sisi server (`GameActions`) yang mendaftarkan tindakan yang dapat dipanggil bernama `GameAction_BuyItem`.
+
 ```lua
--- MySharedModule.luau
-local MySharedModule = {}
+-- Di dalam skrip LocalScript atau ModuleScript sisi klien
 
-MySharedModule.CONSTANTS = {
-    MAX_PLAYERS = 50,
-    GAME_VERSION = "1.0.0"
-}
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-function MySharedModule.CalculateDistance(pos1, pos2)
-    return (pos1 - pos2).Magnitude
+-- 1. Impor modul RemoteClient
+local RemoteClient = require(ReplicatedStorage.Shared.RemoteClient)
+
+-- 2. Panggil fungsi invoke untuk menjalankan fungsi di server dan mendapatkan hasilnya
+-- Argumen pertama adalah nama invoke yang terdaftar di server.
+local success, message = RemoteClient:invoke("GameAction_BuyItem", "SwordOfPower")
+
+if success then
+    print("Pembelian berhasil:", message)
+else
+    warn("Pembelian gagal:", message)
 end
-
-return MySharedModule
 ```
 
-### Menggunakan dari Server
+### Contoh: Menembakkan Peristiwa Sekali Jalan ke Server
+
 ```lua
--- Di ServerScriptService
-local MySharedModule = require(game.ReplicatedStorage.MySharedModule)
-print("Game version:", MySharedModule.CONSTANTS.GAME_VERSION)
+-- Di dalam skrip LocalScript atau ModuleScript sisi klien
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RemoteClient = require(ReplicatedStorage.Shared.RemoteClient)
+
+-- Kirim data ke server tanpa menunggu balasan
+-- Argumen pertama adalah nama peristiwa yang terdaftar di server.
+RemoteClient:fire("PlayerAnalytics_ButtonClicked", "ShopBuyButton")
 ```
 
-### Menggunakan dari Client
-```lua
--- Di StarterPlayerScripts
-local MySharedModule = require(game.ReplicatedStorage.MySharedModule)
-local distance = MySharedModule.CalculateDistance(Vector3.new(0,0,0), Vector3.new(10,0,0))
-```
-
-## Tips:
-- Semua file di sini bisa diakses dari server dan client
-- Gunakan untuk shared utilities, constants, dan configurations
-- Asset system otomatis mapping dari folder `assets/`
+Dengan menggunakan `RemoteClient`, kami memastikan bahwa semua komunikasi jaringan dirutekan melalui satu titik, sehingga lebih mudah untuk melakukan debug, mengamankan, dan memelihara.

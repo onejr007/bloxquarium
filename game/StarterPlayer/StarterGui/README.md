@@ -1,42 +1,56 @@
 # StarterGui
 
-Folder ini berisi semua GUI elements yang akan diberikan ke setiap player saat spawn.
+Folder ini berisi semua elemen Antarmuka Pengguna Grafis (GUI) (`ScreenGui`, `LocalScript`, dll.) yang secara otomatis diberikan kepada setiap pemain saat mereka bergabung dengan permainan.
 
-## Struktur File:
-- `*.luau` - LocalScripts untuk GUI
-- Folder untuk ScreenGui dan components
+## Struktur File
 
-## Contoh Penggunaan:
+- **ScreenGuis**: Setiap `ScreenGui` utama harus menjadi turunannya sendiri di sini.
+- **Skrip Lokal**: Skrip di dalam elemen GUI harus menangani interaksi pengguna, animasi, dan komunikasi dengan server.
+- **Folder**: Atur elemen GUI yang terkait ke dalam folder untuk kejelasan (misalnya, folder `ShopMenu` untuk semua bagian dari UI toko).
 
-### GUI Script
+---
+
+## Contoh Alur Kerja: Tombol GUI yang Berkomunikasi dengan Server
+
+Skrip GUI tidak boleh berisi logika permainan penting. Sebaliknya, mereka harus meminta server untuk melakukan tindakan menggunakan modul `RemoteClient` bersama.
+
+### Contoh: Skrip untuk Tombol "Beli"
+
+Misalkan kita memiliki `TextButton` bernama `BuyButton` di dalam `ScreenGui`.
+
 ```lua
--- MainGui.client.luau
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+-- Di dalam LocalScript yang merupakan anak dari BuyButton
 
--- Buat ScreenGui
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MainGui"
-screenGui.Parent = playerGui
+local button = script.Parent
 
--- Buat Frame
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 200, 0, 100)
-frame.Position = UDim2.new(0, 10, 0, 10)
-frame.BackgroundColor3 = Color3.new(0, 0, 0)
-frame.Parent = screenGui
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Buat TextLabel
-local label = Instance.new("TextLabel")
-label.Size = UDim2.new(1, 0, 1, 0)
-label.Text = "Hello, " .. player.Name .. "!"
-label.TextColor3 = Color3.new(1, 1, 1)
-label.BackgroundTransparency = 1
-label.Parent = frame
+-- 1. Impor modul klien penting
+local RemoteClient = require(ReplicatedStorage.Shared.RemoteClient)
+
+-- 2. Dengarkan peristiwa klik tombol
+button.MouseButton1Click:Connect(function()
+    local itemIdToBuy = "SpecialHealthPotion"
+    print(string.format("Tombol beli diklik. Meminta server untuk membeli item: %s", itemIdToBuy))
+
+    -- 3. Gunakan RemoteClient untuk memanggil fungsi server dengan aman
+    -- Ini memanggil fungsi "GameAction_BuyItem" yang terdaftar di server.
+    local success, message = RemoteClient:invoke("GameAction_BuyItem", itemIdToBuy)
+
+    if success then
+        -- Beri pemain umpan balik di GUI
+        print("Server mengonfirmasi pembelian! Pesan:", message)
+        button.Text = "Dibeli!"
+    else
+        -- Tampilkan pesan kesalahan di GUI
+        warn("Server menolak pembelian! Alasan:", message)
+        button.Text = "Gagal!"
+    end
+end)
 ```
 
-## Tips:
-- GUI yang dibuat di sini akan otomatis diberikan ke setiap player
-- Gunakan untuk HUD, menu, dan interface elements
-- Bisa berisi ScreenGui, LocalScripts, dan ModuleScripts
+## Praktik Terbaik
+
+- **Pemisahan Logika**: Jaga agar logika UI (apa yang dilihat pemain) terpisah dari logika permainan (apa yang terjadi di server).
+- **Gunakan RemoteClient**: Untuk semua tindakan yang memengaruhi permainan (membeli, menjual, menyimpan), gunakan `RemoteClient` untuk meminta server melakukannya.
+- **Berikan Umpan Balik**: Selalu beri tahu pemain apa yang terjadi. Jika mereka mengklik tombol, tunjukkan kepada mereka bahwa itu berfungsi atau mengapa tidak.

@@ -1,70 +1,42 @@
 --[[
-    ServerInit.server.luau (v1.9 - World Ready Sync)
+    ServerInit.server.luau (v2.3 - Handshake Fix)
 
-    - Fires a 'WorldReady' event to clients after the world is generated.
-    - Handles players joining after the initial world generation.
+    - Implements the server-side part of the client-server handshake, fixing the stuck loading screen.
+    - REMOVES the old, unreliable `PlayerAdded` logic that caused the race condition.
+    - The server now waits for a "ClientReady" event from each client before sending back the "WorldReady" signal.
+    - This guarantees that the client is always ready to receive the signal.
 ]]
 
 print("🚀 [Server] Starting Bloxquarium Professional Game Engine...")
 
--- Import core modules
+-- Import the ServiceLoader
 local ServerScriptService = game:GetService("ServerScriptService")
-local Players = game:GetService("Players")
-
--- Import Core Server Services
-local DataService = require(ServerScriptService:WaitForChild("DataService"))
-local RemoteService = require(ServerScriptService:WaitForChild("RemoteService"))
-local GameActions = require(ServerScriptService:WaitForChild("GameActions"))
-local LeaderboardService = require(ServerScriptService:WaitForChild("LeaderboardService"))
-local AdminService = require(ServerScriptService:WaitForChild("AdminService"))
-local WorldService = require(ServerScriptService:WaitForChild("WorldService"))
+local ServiceLoader = require(ServerScriptService:WaitForChild("ServiceLoader"))
 
 -- =======================================================================
--- CRITICAL INITIALIZATION SEQUENCE
+-- INITIALIZATION
 -- =======================================================================
 
--- Step 1: Generate the game world.
-print("🌍 [Server] Generating game world...")
-WorldService:Generate()
+-- The ServiceLoader handles the entire initialization process.
+ServiceLoader:Init()
 
--- Step 2: Initialize the core remote service to enable client-server communication.
-RemoteService:Init()
+-- =======================================================================
+-- WORLD READY HANDSHAKE
+-- =======================================================================
 
--- Step 3: Initialize other services.
-LeaderboardService:Init()
+local RemoteService = ServiceLoader:GetService("RemoteService")
 
--- Step 4: Register Game Actions with the correct remote handlers.
-print("🛡️ [Server] Registering Secure Game Actions...")
-
-RemoteService:RegisterInvoke("GameAction_BuyItem", function(player, itemId)
-    return GameActions:BuyItem(player, itemId)
+-- **HANDSHAKE STEP 3:** Wait for a client to tell us it's ready.
+RemoteService:Register("ClientReady", function(player)
+    print(string.format("🤝 [Server] Received 'ClientReady' from %s. Responding with 'WorldReady'.", player.Name))
+    
+    -- **HANDSHAKE STEP 4:** Respond to that specific client.
+    if RemoteService then
+        RemoteService:SendToClient(player, "WorldReady", {})
+    else
+        warn("[Server] RemoteService not available to notify player.")
+    end
 end)
-print("   -> 'GameAction_BuyItem' registered for invocation.")
-
-RemoteService:RegisterInvoke("KickPlayer", function(player, targetPlayerName)
-    return GameActions:KickPlayer(player, targetPlayerName)
-end)
-print("   -> 'KickPlayer' registered for invocation.")
-
--- Step 5: Initialize the DataService. This comes last as it might depend on other systems.
-DataService:Init()
-
--- =======================================================================
--- WORLD READY NOTIFICATION
--- =======================================================================
-
-local function onPlayerAdded(player)
-    print(string.format("Player %s joined. Notifying client that world is ready.", player.Name))
-    RemoteService:FireClient(player, "WorldReady")
-end
-
--- Notify players who are already in the game
-for _, player in ipairs(Players:GetPlayers()) do
-    onPlayerAdded(player)
-end
-
--- Connect to the PlayerAdded event for new players
-Players.PlayerAdded:Connect(onPlayerAdded)
 
 
 -- =======================================================================
@@ -72,4 +44,4 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 -- =======================================================================
 
 print("✅ [Server] All server systems initialized successfully!")
-print("🎮 [Server] Bloxquarium is now ready for players!")
+print("🎮 [Server] Bloxquarium is now ready for players and awaiting client handshakes.")

@@ -1,8 +1,9 @@
 --[[
-    RemoteClient.luau (v1.1 - Race Condition Fix)
+    RemoteClient.luau (v1.2 - Two-Way Communication)
 
-    Satu-satunya titik antarmuka bagi skrip klien untuk berkomunikasi dengan server.
-    Secara otomatis menangani pembuatan nonce untuk setiap permintaan.
+    Handles all communication to AND from the server.
+    - :FireServer() sends events to the server with a secure nonce.
+    - :On() listens for events sent from the server.
 ]]
 
 --=================[ SERVICES ]=================--
@@ -14,39 +15,80 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 --=================[ CONFIGURATION ]=================--
 local RemoteClient = {}
 
--- PERBAIKAN: Deklarasikan variabel channel di sini, tetapi jangan langsung mencarinya.
--- Ini akan diinisialisasi saat pertama kali dibutuhkan (lazy initialization).
-local channel = nil
+-- Channels (lazy loaded)
+local toServerChannel = nil
+local fromServerChannel = nil
 
--- Penghitung nonce di sisi klien. Terus bertambah untuk setiap permintaan.
+-- Security
 local nonceCounter = 0
 
+-- Client-side event listeners
+local eventListeners = {}
+
 --///////////////////////////////////////////////////////////////////////////
---// API PUBLIK
+--// INTERNAL LOGIC
 --///////////////////////////////////////////////////////////////////////////
 
--- Mengirim permintaan ke server dengan payload yang aman.
--- Ini adalah satu-satunya fungsi yang akan digunakan oleh skrip klien lain.
-function RemoteClient:FireServer(eventName, ...)
-    -- PERBAIKAN: Jika channel belum ditemukan, cari sekarang. Ini hanya akan berjalan sekali.
-    if not channel then
-        print("🔌 [RemoteClient] Mencari 'ClientToServerChannel' untuk pertama kalinya...")
-        channel = ReplicatedStorage:WaitForChild("ClientToServerChannel")
-        print("✅ [RemoteClient] Channel ditemukan dan di-cache.")
+-- Handler utama untuk semua event yang datang DARI server
+local function onServerEvent(payload)
+    if typeof(payload) ~= "table" or not payload.eventName then
+        warn("[RemoteClient] Invalid payload received from server.")
+        return
     end
 
-    -- 1. Tingkatkan nonce untuk membuat permintaan ini unik
+    local eventName = payload.eventName
+    local listener = eventListeners[eventName]
+
+    if listener then
+        -- pcall untuk keamanan, agar satu listener error tidak merusak yang lain
+        local success, err = pcall(listener, table.unpack(payload.args or {}))
+        if not success then
+            warn(string.format("[RemoteClient] Error running listener for event '%s': %s", eventName, err))
+        end
+    end
+end
+
+-- Menginisialisasi listener dari server (jika belum)
+local function initializeFromServerListener()
+    if not fromServerChannel then
+        print("🔌 [RemoteClient] Connecting to 'ClientStateChannel' for server events...")
+        fromServerChannel = ReplicatedStorage:WaitForChild("ClientStateChannel")
+        fromServerChannel.OnClientEvent:Connect(onServerEvent)
+        print("✅ [RemoteClient] Connected to server events.")
+    end
+end
+
+--///////////////////////////////////////////////////////////////////////////
+--// PUBLIC API
+--///////////////////////////////////////////////////////////////////////////
+
+-- Mendaftarkan listener untuk sebuah event yang dikirim OLEH server
+function RemoteClient:On(eventName, callback)
+    if eventListeners[eventName] then
+        warn(string.format("🔌 [RemoteClient] Overwriting listener for event '%s'.", eventName))
+    end
+    eventListeners[eventName] = callback
+    -- Pastikan listener utama sudah aktif
+    initializeFromServerListener()
+end
+
+-- Mengirim event KE server
+function RemoteClient:FireServer(eventName, ...)
+    if not toServerChannel then
+        print("🔌 [RemoteClient] Finding 'ClientToServerChannel'...")
+        toServerChannel = ReplicatedStorage:WaitForChild("ClientToServerChannel")
+        print("✅ [RemoteClient] Client->Server channel cached.")
+    end
+
     nonceCounter += 1
 
-    -- 2. Bungkus semua informasi ke dalam satu tabel (payload)
     local payload = {
         eventName = eventName,
         nonce = nonceCounter,
-        args = {...} -- Semua argumen tambahan dikemas di sini
+        args = {...}
     }
 
-    -- 3. Kirim payload melalui channel tunggal
-    channel:FireServer(payload)
+    toServerChannel:FireServer(payload)
 end
 
 return RemoteClient

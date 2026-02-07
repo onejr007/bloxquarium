@@ -1,8 +1,8 @@
 --[[
-    RemoteService.luau
+    RemoteService.luau (v1.1 - With SendToClient)
 
-    Handler terpusat dan aman untuk semua komunikasi client-to-server.
-    Menerapkan sistem nonce untuk mencegah serangan replay (replay attacks).
+    Central, secure handler for all client-to-server and server-to-client traffic.
+    Implements a nonce system to prevent replay attacks.
 ]]
 
 --=================[ SERVICES ]=================--
@@ -10,109 +10,110 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 --=================[ MODULES ]=================--
-local Promise = require(ReplicatedStorage.Shared.Promise)
+-- none
 
 --=================[ CONFIGURATION ]=================--
 local RemoteService = {}
 
--- Kamus untuk menyimpan fungsi callback yang terdaftar
 local registeredEvents = {}
-
--- Kamus untuk menyimpan nonce terakhir yang valid dari setiap pemain
--- SECURITY: Ini adalah "state" server-side yang digunakan untuk validasi.
 local playerNonceCounters = {}
 
--- Channel komunikasi tunggal dari client ke server
-local channel
+-- Channels (lazy loaded)
+local toClientChannel = nil
+local fromClientChannel = nil
 
 --///////////////////////////////////////////////////////////////////////////
---// API PUBLIK
+--// PUBLIC API
 --///////////////////////////////////////////////////////////////////////////
 
 -- Mendaftarkan sebuah event dengan callback-nya.
--- Semua skrip server lain akan memanggil ini untuk mengekspos fungsionalitas ke klien.
 function RemoteService:Register(eventName, callback)
     if registeredEvents[eventName] then
-        warn(string.format("🔌 [RemoteService] Event '%s' sudah terdaftar. Menimpanya.", eventName))
+        warn(string.format("🔌 [RemoteService] Overwriting event '%s'.", eventName))
     end
     registeredEvents[eventName] = callback
-    print(string.format("🔌 [RemoteService] Event '%s' berhasil didaftarkan.", eventName))
+end
+
+-- Mengirim event dan data ke SATU klien tertentu.
+function RemoteService:SendToClient(player, eventName, ...)
+    -- Lazy load the channel if it doesn't exist
+    if not toClientChannel then
+        print("🔌 [RemoteService] Finding 'ClientStateChannel'...")
+        toClientChannel = ReplicatedStorage:WaitForChild("ClientStateChannel")
+        print("✅ [RemoteService] Server->Client channel cached.")
+    end
+    
+    local payload = {
+        eventName = eventName,
+        args = {...}
+    }
+    
+    toClientChannel:FireClient(player, payload)
 end
 
 --///////////////////////////////////////////////////////////////////////////
---// LOGIKA INTERNAL & KEAMANAN
+--// INTERNAL LOGIC & SECURITY
 --///////////////////////////////////////////////////////////////////////////
 
 -- Handler utama untuk semua permintaan yang masuk dari klien
 local function onClientRequest(player, payload)
-    --[[ SECURITY CHECKS ]]
-    -- 1. Apakah payload-nya sebuah tabel?
     if typeof(payload) ~= "table" then
-        player:Kick("[RS-01] Permintaan tidak valid.")
+        player:Kick("[RS-01] Invalid request.")
         return
     end
 
-    -- 2. Apakah ada nama event dan nonce?
     local eventName, nonce = payload.eventName, payload.nonce
     if not eventName or not nonce or typeof(nonce) ~= "number" then
-        player:Kick("[RS-02] Payload tidak lengkap.")
+        player:Kick("[RS-02] Incomplete payload.")
         return
     end
 
-    -- 3. Apakah nonce yang masuk lebih besar dari yang terakhir kita lihat?
-    -- Ini adalah validasi inti untuk mencegah replay attacks.
     local lastNonce = playerNonceCounters[player.UserId]
     if not lastNonce or nonce <= lastNonce then
-        player:Kick(string.format("[RS-03] Urutan permintaan tidak valid. Nonce: %d, Server: %d", nonce, lastNonce or -1))
+        player:Kick(string.format("[RS-03] Invalid request sequence. N: %d, S: %d", nonce, lastNonce or -1))
         return
     end
 
-    -- 4. Apakah event-nya terdaftar?
     local callback = registeredEvents[eventName]
     if not callback then
-        player:Kick(string.format("[RS-04] Event tidak dikenal: %s", tostring(eventName)))
+        player:Kick(string.format("[RS-04] Unknown event: %s", tostring(eventName)))
         return
     end
 
-    --[[ VALIDASI BERHASIL ]]
-    -- Update nonce terakhir yang kita lihat dari pemain ini.
     playerNonceCounters[player.UserId] = nonce
     
-    -- Panggil callback yang sesuai dengan argumen yang diberikan
-    -- pcall untuk menangkap error di dalam callback agar tidak merusak handler
     local success, result = pcall(callback, player, table.unpack(payload.args or {}))
     if not success then
-        warn(string.format("🔌 [RemoteService] Error saat menjalankan callback untuk event '%s': %s", eventName, tostring(result)))
+        warn(string.format("🔌 [RemoteService] Error during callback for event '%s': %s", eventName, tostring(result)))
     end
 end
 
 --///////////////////////////////////////////////////////////////////////////
---// INISIALISASI
+--// INITIALIZATION
 --///////////////////////////////////////////////////////////////////////////
 
 function RemoteService:Init()
-    print("🔌 [RemoteService] Inisialisasi handler remote yang aman...")
+    print("🔌 [RemoteService] Initializing secure remote handler...")
 
-    -- Buat channel komunikasi
-    channel = Instance.new("RemoteEvent")
-    channel.Name = "ClientToServerChannel"
-    channel.Parent = ReplicatedStorage
+    fromClientChannel = Instance.new("RemoteEvent")
+    fromClientChannel.Name = "ClientToServerChannel"
+    fromClientChannel.Parent = ReplicatedStorage
+    fromClientChannel.OnServerEvent:Connect(onClientRequest)
 
-    -- Setup listener
-    channel.OnServerEvent:Connect(onClientRequest)
+    -- Create the channel for server-to-client communication
+    toClientChannel = Instance.new("RemoteEvent")
+    toClientChannel.Name = "ClientStateChannel"
+    toClientChannel.Parent = ReplicatedStorage
 
-    -- Setup dan cleanup untuk setiap pemain
     Players.PlayerAdded:Connect(function(player)
-        -- Inisialisasi counter nonce untuk pemain baru
         playerNonceCounters[player.UserId] = 0
     end)
 
     Players.PlayerRemoving:Connect(function(player)
-        -- Hapus data pemain dari tabel nonce untuk manajemen memori
         playerNonceCounters[player.UserId] = nil
     end)
 
-    print("✅ [RemoteService] Handler remote siap menerima koneksi aman.")
+    print("✅ [RemoteService] Secure handler is ready.")
 end
 
 return RemoteService

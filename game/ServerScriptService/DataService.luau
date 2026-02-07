@@ -1,14 +1,7 @@
 --[[
-    DataService.luau (v5.1 - State Update Signal)
+    DataService.luau (v5.3 - Generic Set Function)
 
-    Layanan data terpusat dengan arsitektur staging:
-    1. Optimasi: Menggunakan pustaka `task` untuk penjadwalan.
-    2. Advanced Scripting: Arsitektur berbasis Promise untuk operasi async.
-    3. Memory Management: Pembersihan cache yang jelas saat pemain keluar.
-    4. Security: Mengambil kunci API dari SecretService di server live.
-    5. Network Efficiency: Firebase sebagai penyimpanan permanen, DataStore sebagai
-       'cache' server-side yang kuat untuk sesi game aktif.
-    6. NEW (v5.1): Menambahkan sinyal 'StateUpdated' untuk sinkronisasi server-ke-server.
+    Adds a generic :Set(path, data) function to write any data to Firebase.
 ]]
 
 --=================[ SERVICES ]=================--
@@ -128,11 +121,21 @@ end
 --// FUNGSI API (DATASTORE & FIREBASE)
 --///////////////////////////////////////////////////////////////////////////
 
+-- BARU (v5.3): Fungsi generik untuk menulis data ke jalur Firebase
+function DataService:Set(path, data)
+    print(string.format("   -> Menulis data generik ke jalur Firebase: %s...", path))
+    return _requestFirebase("PUT", path, data)
+end
+
+function DataService:Get(path)
+    print(string.format("   -> Meminta data generik dari jalur Firebase: %s...", path))
+    return _requestFirebase("GET", path)
+end
+
 function DataService:GetSessionData(player)
     return playerSessionData[player.UserId]
 end
 
--- NEW (v5.1): Fungsi terpusat untuk memodifikasi state pemain.
 function DataService:SetState(player, key, value)
     local userId = player.UserId
     local data = playerSessionData[userId]
@@ -142,14 +145,9 @@ function DataService:SetState(player, key, value)
     end
     
     data[key] = value
-    
-    -- Beri tahu listener di sisi server (mis. LeaderboardService)
     self.StateUpdated:Fire(player, data)
-    
-    -- Kirim state yang diperbarui ke klien yang relevan
     self:UpdateClientState(player)
 end
-
 
 function DataService:SaveToFirebase(player)
     local userId = player.UserId
@@ -207,7 +205,6 @@ function DataService:GetPlayerData(player)
 
             if firebaseData then
                 print("   -> Data ditemukan di Firebase.")
-                print("   -> [DEBUG] FULL FIREBASE DATA: " .. HttpService:JSONEncode(firebaseData))
                 finalData = createMergedData(firebaseData, template)
             else
                 print("   -> Data tidak ditemukan di Firebase, mencoba dari DataStore...")
@@ -262,7 +259,7 @@ end
 --///////////////////////////////////////////////////////////////////////////
 
 function DataService:Init()
-    print("💾 [DataService] Inisialisasi Layanan Data v5.1 (State Update Signal)...")
+    print("💾 [DataService] Inisialisasi Layanan Data v5.3 (Generic Set)...")
     local clientStateChannel = ReplicatedStorage:FindFirstChild("ClientStateChannel") or Instance.new("RemoteEvent", ReplicatedStorage)
     clientStateChannel.Name = "ClientStateChannel"
 
@@ -320,7 +317,7 @@ function DataService:Init()
         task.wait(5)
     end)
 
-    print("✅ [DataService] Layanan Data berhasil diinisialisai.")
+    print("✅ [DataService] Layanan Data berhasil diinisialisasi.")
 end
 
 return DataService

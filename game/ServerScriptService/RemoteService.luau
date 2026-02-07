@@ -1,22 +1,26 @@
 --[[
-    RemoteService.luau (v2.3 - Event Firing)
+    RemoteService.luau (v2.4 - Multi-Phase Loading)
 
-    - Added :FireClient() method to allow other server services to securely fire events to clients.
+    - The `GetAssetRegistry` invoke now returns both the asset config and the new loading phase config.
+    - This provides the client with all the necessary information for a structured, multi-phase load.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+-- Core Dependencies
 local Remote = require(ServerScriptService.RemoteServer)
 local DataService = require(script.Parent.DataService)
+
+-- Configuration
 local AssetConfig = require(script.Parent.asset_config)
+local LoadingConfig = require(script.Parent.loading_config) -- Added Loading Config
 
 local RemoteService = {}
 
 local function Log(m)
-    print(string.format("🛡️ [RemoteService v2.3] %s", m))
+    print(string.format("🛡️ [RemoteService v2.4] %s", m))
 end
-
 
 function RemoteService:Register(eventName, handler)
     Log(string.format("Registering Event: '%s'", eventName))
@@ -34,11 +38,15 @@ function RemoteService:FireClient(player, eventName, args)
 end
 
 function RemoteService:Init()
-    Log("Initializing secure remote handler v2.3...")
+    Log("Initializing secure remote handler v2.4...")
 
+    -- MODIFIED: Now returns a dictionary containing both configs
     self:RegisterInvoke("GetAssetRegistry", function(player)
-        Log(string.format("Asset registry requested by: %s. Sending config directly.", player.Name))
-        return AssetConfig
+        Log(string.format("Asset & Loading configs requested by: %s. Sending.", player.Name))
+        return {
+            AssetConfig = AssetConfig,
+            LoadingConfig = LoadingConfig
+        }
     end)
 
     self:RegisterInvoke("RequestAllPlayerData", function(player)

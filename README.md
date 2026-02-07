@@ -1,101 +1,75 @@
-# Bloxquarium - Professional Game Foundation
+# Dokumentasi Teknis Bloxquarium
 
-Selamat datang di Bloxquarium! Ini bukan sekadar game, melainkan sebuah **fondasi arsitektur game profesional** yang dibangun di Roblox. Proyek ini dirancang untuk menjadi titik awal yang solid bagi proyek game serius apa pun, dengan menekankan pada stabilitas, skalabilitas, dan praktik pengembangan modern.
+Dokumen ini menguraikan arsitektur teknis proyek Bloxquarium. Sistem ini dirancang untuk ketahanan dan skalabilitas, menampilkan model penyimpanan data hibrida dan alur manajemen aset yang kuat.
 
-[![Rojo](https://img.shields.io/badge/managed%20by-Rojo-blue.svg?style=for-the-badge&logo=roblox)](https://rojo.space/)
+## Tinjauan Arsitektur
 
-## 🌟 Fitur Arsitektur Utama
+Arsitektur server dibangun di sekitar serangkaian layanan modular yang masing-masing menangani tanggung jawab tertentu. Logika inti berkisar pada pemuatan, pengelolaan, dan penyimpanan data pemain dan aset game.
 
-Proyek ini tidak hanya berisi aset, tetapi juga serangkaian sistem inti yang saling berhubungan dan siap pakai:
+- **Penyimpanan Data**: Sistem menggunakan pendekatan hibrida. **Firebase Realtime Database** adalah penyimpanan data utama, sedangkan **Roblox DataStore** berfungsi sebagai cadangan yang andal.
+- **Manajemen Aset**: Aset game dikelola melalui alur sinkronisasi klien-server untuk memastikan bahwa pemain hanya memuat apa yang mereka butuhkan, saat mereka membutuhkannya.
+- **Komunikasi**: Klien dan server berkomunikasi melalui `RemoteClient` dan `RemoteServer` (tidak dianalisis secara langsung tetapi diinferensikan), yang memfasilitasi pengambilan data dan aset.
 
-*   **🚀 Game Bootstrapper Profesional:**
-    *   Mengelola urutan startup yang kompleks secara terkendali dan dapat diandalkan.
-    *   Menjalankan tugas-tugas secara asinkron dengan pelaporan status yang jelas.
-    *   Memastikan semua sistem diinisialisasi dalam urutan yang benar untuk mencegah *race condition*.
+---
 
-*   **🔒 Layanan Komunikasi Aman (`RemoteService`):
-    *   Satu titik masuk tunggal untuk semua komunikasi client-server, menyederhanakan keamanan.
-    *   Validasi *nonce* otomatis untuk melindungi dari serangan replay sederhana.
-    *   Mekanisme pendaftaran event yang bersih, mencegah pemanggilan fungsi yang tidak sah.
+## Layanan & Modul Utama
 
-*   **💾 Layanan Data & State (`DataService` & `ClientState`):
-    *   Mengabstraksi logika `DataStore` dengan *retry mechanism* bawaan.
-    *   Secara otomatis menyinkronkan data pemain ke klien saat mereka bergabung.
-    *   Menyediakan **manajer state reaktif di sisi klien (`ClientState`)** yang memungkinkan UI dan sistem lain untuk "berlangganan" perubahan data secara real-time, menyederhanakan pengembangan UI secara drastis.
+### 1. `DataService` (v3.3)
 
-*   **🔑 Manajemen Konfigurasi & Rahasia (Hybrid):
-    *   `config.luau` untuk konfigurasi gameplay yang dapat diakses oleh klien dan server.
-    *   `secrets_config.server.luau` (di-gitignore) untuk menyimpan kunci API dan rahasia lain dengan aman di server.
+- **Tanggung Jawab**: Merupakan pusat utama untuk semua data pemain. Layanan ini mengelola cache data sesi pemain, menangani logika pemuatan/penyimpanan, dan menyediakan API untuk layanan lain untuk berinteraksi dengan data pemain.
+- **Fitur Utama**:
+    - **Pemuatan Hibrida**: Mencoba memuat data dari `FirebaseService` terlebih dahulu, dan jika gagal, beralih ke `DatabaseService` (DataStore).
+    - **Cache Sesi**: Menyimpan data semua pemain yang sedang online dalam tabel Lua untuk akses cepat.
+    - **Perbaikan Panel Admin (v3.3)**: Menyertakan fungsi `UpdatePlayerData` yang penting untuk memungkinkan admin mengedit data pemain tanpa menimpa seluruh catatan mereka, memperbaiki kerusakan server sebelumnya.
 
-*   **📦 Manajemen Aset Terpusat (`AssetManager` v2):
-    *   Semua aset (gambar, suara, model) didaftarkan dalam satu file konfigurasi (`asset_config.luau`).
-    *   Menghilangkan kebutuhan untuk menelusuri folder; cukup minta aset berdasarkan nama kustom Anda.
-    *   Mendukung *preloading* dan *caching* untuk performa optimal.
+### 2. `FirebaseService` (v2.1)
 
-## 📁 Struktur Proyek yang Disempurnakan
+- **Tanggung Jawab**: Pembungkus tingkat rendah untuk panggilan API REST Firebase Realtime Database. Ini mengabstraksi permintaan HTTP `GET` (mengambil) dan `PUT` (menyimpan).
+- **Konteks Historis (v2.1)**: Versi ini berisi penambahan *debugging* yang signifikan, yang menunjukkan bahwa masalah pemuatan data dari Firebase adalah masalah kritis di masa lalu. Layanan ini sekarang stabil tetapi mempertahankan log ini untuk diagnostik.
 
-Struktur direktori dirancang agar intuitif dan selaras dengan praktik terbaik Rojo.
+### 3. `DatabaseService` (v1.2)
 
-```
-bloxquarium/
-├── game/                           # Struktur 1:1 dengan Roblox Explorer
-│   ├── ServerScriptService/        # Skrip dan Layanan Inti Server
-│   │   ├── DataService.luau
-│   │   ├── RemoteService.luau
-│   │   ├── asset_config.luau
-│   │   └── secrets_config.server.luau.example
-│   ├── StarterPlayer/
-│   │   └── StarterPlayerScripts/
-│   │       └── ClientInit.client.luau # Titik masuk utama Klien
-│   └── ReplicatedStorage/          # Modul Bersama
-│       └── Shared/
-│           ├── AssetManager.luau
-│           ├── ClientState.luau
-│           ├── GameBootstrapper.luau
-│           └── RemoteClient.luau
-├── assets/
-│   ├── models/                     # HANYA untuk file model .rbxm
-│   └── README.md                   # Penjelasan alur kerja aset
-└── default.project.json            # Konfigurasi Rojo
-```
+- **Tanggung Jawab**: Pembungkus yang stabil dan andal untuk `DataStoreService` Roblox.
+- **Fitur Utama**:
+    - **API CRUD Dasar**: Menyediakan fungsi `Create`, `Read`, `Update`, dan `Delete`.
+    - **Penanganan Error yang Benar**: Komentar menekankan bahwa layanan ini dengan benar mengembalikan pasangan `success, result`, menjadikannya fondasi yang dapat diandalkan untuk `DataService`.
 
-## 🛠️ Memulai
+### 4. `AssetManagerV3` (v3.2 - Klien)
 
-1.  **Konfigurasi Rahasia:**
-    *   Salin `game/ServerScriptService/secrets_config.server.luau.example` menjadi `secrets_config.server.luau`.
-    *   Isi file tersebut dengan kunci API atau data rahasia Anda. File ini sudah terdaftar di `.gitignore` untuk mencegah kebocoran.
+- **Tanggung Jawab**: Mengelola, mem-preload, dan menyediakan akses ke semua aset game di sisi klien.
+- **Fitur Utama**:
+    - **Sinkronisasi Server**: Saat memulai, ia meminta daftar aset lengkap dari server.
+    - **Preloading Kritis**: Secara khusus mem-preload aset yang terdaftar di `CriticalAssetNames` (dari `asset_config`) sebelum mengizinkan game untuk melanjutkan, memastikan aset UI/suara penting tersedia segera.
+    - **Perbaikan Struktur (v3.2)**: Memperbaiki bug kritis di mana manajer salah membaca tabel aset, yang menyebabkan kegagalan preloading.
 
-2.  **Daftarkan Aset:**
-    *   Unggah gambar/suara Anda ke Roblox dan salin ID-nya.
-    *   Letakkan model `.rbxm` Anda di `assets/models/`.
-    *   Buka `game/ServerScriptService/asset_config.luau` dan daftarkan semua aset Anda.
+### 5. `asset_config.luau` (v2 - Server)
 
-3.  **Build & Jalankan:**
-    *   Gunakan ekstensi Rojo di VS Code untuk melakukan sinkronisasi dengan Roblox Studio.
-    *   Atau, jalankan perintah `rojo build -o "bloxquarium.rbxlx"` untuk membuat file proyek.
+- **Tanggung Jawab**: Sumber kebenaran tunggal untuk semua definisi aset di server.
+- **Fitur Utama**:
+    - **Daftar Aset Terpusat**: Mendefinisikan ID untuk semua gambar, suara, model, dll.
+    - **Daftar Preload Eksplisit**: Berisi tabel `CriticalAssetNames` yang secara eksplisit memberitahu `AssetManagerV3` aset mana yang harus dimuat saat startup.
+    - **Perbaikan Struktur (v2)**: Direstrukturisasi untuk menghindari penimpaan kunci Lua, yang sebelumnya menyebabkan daftar aset yang tidak lengkap dikirim ke klien.
 
-## 💡 Contoh Penggunaan: UI Reaktif
+---
 
-Berkat `ClientState`, membuat UI yang menampilkan data pemain menjadi sangat mudah. Tidak perlu lagi meminta data secara manual.
+## Alur Data
 
-```lua
--- Di dalam sebuah LocalScript di dalam GUI Anda
+### Alur Pemuatan Data Pemain (Saat Bergabung)
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ClientState = require(ReplicatedStorage.Shared.ClientState)
+1.  Pemain bergabung dengan game.
+2.  `DataService` dipicu.
+3.  `DataService` memanggil `FirebaseService.GetPlayerDataAsync`.
+    - **Jika Berhasil**: Data dimuat ke dalam `sessionCache`. Cadangan di `DataStore` diperbarui.
+    - **Jika Gagal**: `DataService` memanggil `DatabaseService.Read` untuk mencoba memuat dari cadangan DataStore.
+        - **Jika Berhasil (Cadangan)**: Data dimuat ke dalam `sessionCache`.
+        - **Jika Gagal (Cadangan)**: `DataService` membuat data pemain default baru (`getDefaultPlayerData`) dan menyimpannya di `sessionCache`. Cadangan awal dibuat di `DataStore`.
+4.  Acara `StateUpdated` diaktifkan, memberi sinyal kepada bagian lain dari game (seperti UI) bahwa data pemain siap.
 
-local coinLabel = script.Parent.CoinLabel
+### Alur Pemuatan Aset (Saat Klien Memulai)
 
--- Fungsi yang akan berjalan setiap kali data berubah
-local function updateUI(newState)
-    coinLabel.Text = string.format("Koin: %d", newState.coins or 0)
-end
-
--- Berlangganan ke perubahan state. UI akan diperbarui secara otomatis.
-local unsubscribe = ClientState:OnChange(updateUI)
-
--- (Opsional) Panggil 'unsubscribe()' saat UI dihancurkan untuk membersihkan memori.
-script.Parent.Destroying:Connect(unsubscribe)
-```
-
-Arsitektur ini menyediakan fondasi yang kuat sehingga Anda bisa langsung fokus pada hal yang paling penting: **membangun gameplay yang menarik.**
+1.  Klien memulai dan menginisialisasi `AssetManagerV3`.
+2.  `AssetManagerV3` memanggil `RemoteClient:InvokeServer("GetAssetRegistry")`.
+3.  Server merespons dengan seluruh tabel konfigurasi dari `asset_config.luau`.
+4.  `AssetManagerV3` mengurai tabel ini, mendaftarkan semua aset, dan mengidentifikasi aset penting dari daftar `CriticalAssetNames`.
+5.  Fungsi `preloadInitialAsync` dipanggil, menggunakan `ContentProvider:PreloadAsync` pada semua aset penting.
+6.  `AssetManager.PreloadComplete` diaktifkan, memberi sinyal pada layar pemuatan untuk selesai.

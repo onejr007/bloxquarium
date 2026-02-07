@@ -1,11 +1,12 @@
 --[[
-    AssetManager.luau (v3.2 - FINAL STRUCTURE FIX)
+    AssetManager.luau (v4.0 - Multi-Phase Loading)
 
-    - CRITICAL FIX (1/2): The `flattenAndRegister` function now correctly ignores the `CriticalAssetNames` table,
-      preventing the asset registry from being corrupted during synchronization.
-    - CRITICAL FIX (2/2): The `syncWithServerAsync` function has been updated to read the `CriticalAssetNames` table
-      (instead of the old `Critical` table) to correctly identify which assets to preload.
-	- This is the definitive fix that aligns the client's logic with the server's data structure.
+    - MAJOR REWRITE: This version introduces a structured, multi-phase preloading system.
+    - It now depends on a `loading_config` file from the server to define loading phases.
+    - `syncWithServerAsync`: Now expects a dictionary containing `AssetConfig` and `LoadingConfig`.
+    - `preloadInitialAsync`: Completely rewritten. It now iterates through the defined `LoadingPhases`,
+      firing a new `PhaseChanged` event before starting each phase.
+    - This provides a much more robust and informative loading experience.
 ]]--
 
 local ContentProvider = game:GetService("ContentProvider")
@@ -22,14 +23,14 @@ local AssetManager = {}
 --======================================================================
 
 local assetRegistry = {} 
-local preloadList = {} 
+local loadingPhases = {} -- New: To store loading phases
 local preloadedAssets = {} 
-local processedAssetCache = {}
 
 local isInitialized = false
 local isPreloading = false
 
 -- Events
+local phaseChangedEvent = Instance.new("BindableEvent") -- New: For phase changes
 local preloadProgressEvent = Instance.new("BindableEvent")
 local preloadCompleteEvent = Instance.new("BindableEvent")
 local readyEvent = Instance.new("BindableEvent")
@@ -38,7 +39,7 @@ local readyEvent = Instance.new("BindableEvent")
 --=                     INISIALISASI & REGISTRASI                      =
 --======================================================================
 
--- FIXED: Now correctly ignores the `CriticalAssetNames` list.
+-- Unchanged: Still flattens the asset config into the registry.
 local function flattenAndRegister(config, targetRegistry)
     for category, assets in pairs(config) do
         if typeof(assets) == "table" and category ~= "CriticalAssetNames" then
@@ -52,37 +53,35 @@ local function flattenAndRegister(config, targetRegistry)
     end
 end
 
+-- MODIFIED: Now handles the new config structure.
 function AssetManager.syncWithServerAsync()
     if RunService:IsServer() then return true end
     if isInitialized then return true end
 
-    print("🔍 [AssetManager v3.2] Meminta registry aset dari server melalui RemoteClient...")
+    print("🔍 [AssetManager v4.0] Meminta registry aset & fase pemuatan dari server...")
     
     return Promise.new(function(resolve, reject)
-        RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedConfig)
-            if not receivedConfig then
-                warn("[AssetManager v3.2] Gagal menerima payload aset dari server.")
-                reject("Payload was nil")
+        RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedPayload)
+            if not receivedPayload or not receivedPayload.AssetConfig or not receivedPayload.LoadingConfig then
+                warn("[AssetManager v4.0] Gagal menerima payload konfigurasi dari server.")
+                reject("Payload was nil or malformed")
                 return
             end
 
-            flattenAndRegister(receivedConfig, assetRegistry)
-
-            -- FIXED: Reads the new `CriticalAssetNames` table to build the preload list.
-            if receivedConfig.CriticalAssetNames then
-                preloadList = receivedConfig.CriticalAssetNames
-            end
+            -- Process both configs
+            flattenAndRegister(receivedPayload.AssetConfig, assetRegistry)
+            loadingPhases = receivedPayload.LoadingConfig.LoadingPhases
 
             isInitialized = true
             readyEvent:Fire()
             
             local assetCount = 0
             for _ in pairs(assetRegistry) do assetCount = assetCount + 1 end
-            print(string.format("📦 [AssetManager v3.2] Client sinkronisasi selesai. Menerima %d aset total.", assetCount))
+            print(string.format("📦 [AssetManager v4.0] Client sinkronisasi selesai. Menerima %d aset dan %d fase pemuatan.", assetCount, #loadingPhases))
             resolve(true)
         
         end, function(err)
-            warn("[AssetManager v3.2] Panggilan InvokeServer gagal: " .. tostring(err))
+            warn("[AssetManager v4.0] Panggilan InvokeServer gagal: " .. tostring(err))
             reject(err)
         end)
     end)
@@ -91,7 +90,7 @@ end
 
 function AssetManager.Initialize()
     if not RunService:IsServer() then
-        print("🔍 [AssetManager v3.2] Menginisialisasi registry aset (klien menunggu sinkronisasi)...")
+        print("🔍 [AssetManager v4.0] Menginisialisasi registry aset (menunggu sinkronisasi)...")
     end
 end
 
@@ -99,6 +98,7 @@ end
 --=                       PRELOADING & CACHING                         =
 --======================================================================
 
+-- Unchanged: Still preloads a single asset.
 local function preloadAsset(asset, assetName)
     local id = type(asset) == 'table' and asset.id or asset
     if not (id and type(id) == 'string' and id:match("rbxassetid")) then
@@ -118,61 +118,81 @@ local function preloadAsset(asset, assetName)
     return success
 end
 
+-- REWRITTEN: Implements multi-phase preloading.
 function AssetManager.preloadInitialAsync()
     if isPreloading then return end
-	isPreloading = true
+    isPreloading = true
 
-	print("⏳ [AssetManager v3.2] Memulai proses preloading aset KRITIS...")
-	local startTime = tick()
+    print("⏳ [AssetManager v4.0] Memulai proses pemuatan multi-fase...")
+    local startTime = tick()
     
-    local totalAssets = #preloadList
-    if totalAssets == 0 then
-        print("✅ [AssetManager v3.2] Tidak ada aset kritis untuk di-preload. Langsung selesai.")
+    local totalAssetsToLoad = 0
+    for _, phase in ipairs(loadingPhases) do
+        totalAssetsToLoad = totalAssetsToLoad + #phase.AssetNames
+    end
+
+    if totalAssetsToLoad == 0 then
+        print("✅ [AssetManager v4.0] Tidak ada aset untuk di-preload. Langsung selesai.")
         isPreloading = false
         preloadCompleteEvent:Fire(0, 0)
         return
     end
 
-    local loadedAssets, failedAssets = 0, 0
-	for i, assetName in ipairs(preloadList) do
-        local assetData = assetRegistry[assetName]
-        if not assetData then
-            warn(string.format("    -> ⚠️ Tidak dapat melakukan preload: aset '%s' tidak ditemukan di registry.", assetName))
-            failedAssets = failedAssets + 1
-        elseif preloadAsset(assetData, assetName) then
-			loadedAssets = loadedAssets + 1
-		else
-			failedAssets = failedAssets + 1
-		end
-        preloadProgressEvent:Fire(loadedAssets, totalAssets, assetName)
-		if i % 10 == 0 then task.wait() end
-	end
+    local totalLoadedAssets = 0
+    local totalFailedAssets = 0
 
-	isPreloading = false
-	print(string.format("✅ [AssetManager v3.2] Preloading kritis selesai dalam %.2fs. Berhasil: %d, Gagal: %d.", (tick() - startTime), loadedAssets, failedAssets))
-	preloadCompleteEvent:Fire(loadedAssets, totalAssets)
+    -- Iterate through each phase
+    for i, phase in ipairs(loadingPhases) do
+        print(string.format("  -> Memulai Fase %d/%d: %s", i, #loadingPhases, phase.PhaseName))
+        phaseChangedEvent:Fire(phase.PhaseName, phase.Description, #phase.AssetNames)
+
+        local phaseLoaded, phaseFailed = 0, 0
+        for _, assetName in ipairs(phase.AssetNames) do
+            local assetData = assetRegistry[assetName]
+            if not assetData then
+                warn(string.format("    -> ⚠️ Tidak dapat melakukan preload: aset '%s' tidak ditemukan di registry.", assetName))
+                phaseFailed = phaseFailed + 1
+            elseif preloadAsset(assetData, assetName) then
+                phaseLoaded = phaseLoaded + 1
+            else
+                phaseFailed = phaseFailed + 1
+            end
+            -- Fire global progress
+            preloadProgressEvent:Fire(totalLoadedAssets + phaseLoaded, totalAssetsToLoad, assetName)
+            task.wait(0.01) -- Yield to prevent freezing
+        end
+        
+        totalLoadedAssets = totalLoadedAssets + phaseLoaded
+        totalFailedAssets = totalFailedAssets + phaseFailed
+        print(string.format("    -> Fase '%s' selesai. Berhasil: %d, Gagal: %d.", phase.PhaseName, phaseLoaded, phaseFailed))
+    end
+
+    isPreloading = false
+    print(string.format("✅ [AssetManager v4.0] Semua fase pemuatan selesai dalam %.2fs. Total Berhasil: %d, Total Gagal: %d.", (tick() - startTime), totalLoadedAssets, totalFailedAssets))
+    preloadCompleteEvent:Fire(totalLoadedAssets, totalAssetsToLoad)
 end
 
 --======================================================================
 --=                            API PUBLIK                            =
 --======================================================================
 
+AssetManager.PhaseChanged = phaseChangedEvent.Event -- New Event
 AssetManager.PreloadProgress = preloadProgressEvent.Event
 AssetManager.PreloadComplete = preloadCompleteEvent.Event
 AssetManager.OnReady = readyEvent.Event
+
 function AssetManager.IsReady()
     return isInitialized
 end
 
 function AssetManager.get(assetName)
-	local asset = assetRegistry[assetName]
-	if not asset then
-		warn(string.format("[AssetManager v3.2] Aset '%s' tidak ditemukan di registry!", assetName))
-		return nil
-	end
-	return asset
+    local asset = assetRegistry[assetName]
+    if not asset then
+        warn(string.format("[AssetManager v4.0] Aset '%s' tidak ditemukan di registry!", assetName))
+        return nil
+    end
+    return asset
 end
-
 
 --======================================================================
 --=                         AUTO-INISIALISASI                        =

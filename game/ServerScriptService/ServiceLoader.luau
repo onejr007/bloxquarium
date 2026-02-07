@@ -16,6 +16,7 @@ local INIT_ORDER = {
     "WorldService",
     "FirebaseService",
     "DatabaseService",
+    "PlotService",
     
     -- Level 1: Services that depend on Level 0
     "DataService",          -- Depends on FirebaseService, DatabaseService

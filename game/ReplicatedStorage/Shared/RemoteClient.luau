@@ -1,12 +1,12 @@
 --[[
-    RemoteClient.luau (v1.2 - PARSER FIX)
+    RemoteClient.luau (v1.3 - Server Guard Fix)
 
-    - FIXED: The "Cannot use '...' outside of a vararg function" crash.
-    - The logic for packing variable arguments has been rewritten to be more explicit and avoid a potential Luau parser bug.
-    - The client-side remote layer is now stable.
+    - FIXED: A critical crash where the script would attempt to run client-only code on the server.
+    - The initialization call is now wrapped in a RunService:IsClient() check.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Promise = require(script.Parent.Promise)
 
 local RemoteClient = {}
@@ -40,7 +40,6 @@ function RemoteClient:FireServer(eventName, ...)
         warn("[RemoteClient] Cannot FireServer, remote event not initialized.")
         return
     end
-    -- CRITICAL FIX: Explicitly pack the varargs into a table first.
     local packedArgs = {...}
     local eventData = {eventName = eventName, args = packedArgs}
     remoteEvent:FireServer(eventData)
@@ -52,7 +51,6 @@ function RemoteClient:InvokeServer(eventName, ...)
         return Promise.reject("Remote function not available")
     end
 
-    -- CRITICAL FIX: Explicitly pack the varargs for the same reason.
     local packedArgs = {...}
 
     return Promise.new(function(resolve, reject)
@@ -86,7 +84,9 @@ function RemoteClient:On(eventName, callback)
     return connection
 end
 
-
-task.spawn(initializeFromServerListener)
+-- CRITICAL FIX: Only run client-specific initialization on the client.
+if RunService:IsClient() then
+    task.spawn(initializeFromServerListener)
+end
 
 return RemoteClient

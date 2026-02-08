@@ -107,6 +107,28 @@ function Promise:catch(onRejected)
     end)
 end
 
+-- Menunggu Promise selesai dan mengembalikan nilainya (Harus dipanggil di dalam thread/coroutine)
+function Promise:await()
+    if self._status == STATUS.RESOLVED then
+        return self._value
+    elseif self._status == STATUS.REJECTED then
+        error(self._reason)
+    end
+
+    local thread = coroutine.running()
+    self:andThen(function(value)
+        task.spawn(thread, value)
+    end):catch(function(reason)
+        task.spawn(thread, nil, reason)
+    end)
+
+    local value, reason = coroutine.yield()
+    if reason then
+        error(reason)
+    end
+    return value
+end
+
 -- Fungsi statis untuk membuat Promise yang sudah resolved
 function Promise.resolve(value)
     return Promise.new(function(resolve)

@@ -119,6 +119,39 @@ function FirebaseService:SetAsync(path, data)
     end)
 end
 
+function FirebaseService:UpdateAsync(path, data)
+    return Promise.new(function(resolve, reject)
+        local url = buildUrl(path)
+        local json_data
+
+        local json_success, json_err = pcall(function()
+            json_data = HttpService:JSONEncode(data)
+        end)
+
+        if not json_success then
+            Log(string.format("Failed to encode data to JSON for path '%s': %s", path, json_err))
+            return reject("JSON Encode Error")
+        end
+
+        local success, result = pcall(function() 
+            return HttpService:RequestAsync({
+                Url = url,
+                Method = "PATCH",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = json_data
+            })
+        end)
+
+        if not success then
+            Log(string.format("HTTP PATCH request FAILED for path '%s': %s", path, tostring(result)))
+            return reject(result)
+        end
+        
+        Log(string.format("Successfully updated data at path: %s", path))
+        return resolve(true)
+    end)
+end
+
 --======================================================================
 --=                         INITIALIZATION                           =
 --======================================================================

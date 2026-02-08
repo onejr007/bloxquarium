@@ -152,15 +152,30 @@ function DataService:Set(path: string, data: any)
     return FirebaseService:SetAsync(path, data)
 end
 
-function DataService:Update(player: Player, newData: any)
-    local userId = tostring(player.UserId)
-    if sessionCache[userId] then
-        sessionCache[userId] = newData
-        stateUpdatedEvent:Fire(player)
-        DataStoreManager.Update(userId, newData)
-        return true
+function DataService:UpdateGlobal(path: string, data: any)
+    return FirebaseService:UpdateAsync(path, data)
+end
+
+function DataService:Update(argument: any, data: any)
+    if typeof(argument) == "Instance" and argument:IsA("Player") then
+        local userId = tostring(argument.UserId)
+        if sessionCache[userId] then
+            sessionCache[userId] = data
+            stateUpdatedEvent:Fire(argument)
+            DataStoreManager.Update(userId, data)
+            return true
+        end
+        return false
+    elseif typeof(argument) == "string" then
+        return FirebaseService:UpdateAsync(argument, data)
+    else
+        warn("DataService:Update() invalid argument: " .. typeof(argument))
+        return nil
     end
-    return false
+end
+
+function DataService:Delete(path: string)
+    return FirebaseService:SetAsync(path, nil)
 end
 
 function DataService:UpdatePlayerData(userId: string|number, partialData: any)

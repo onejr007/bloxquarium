@@ -32,6 +32,48 @@ function ShopService:GetCachedShopData()
     return currentShopDataCache
 end
 
+function ShopService:GetChanceData()
+    return DataService:Get("/game/chance")
+end
+
+function ShopService:UpdateShopStock(itemId: string, newStock: number)
+    if not currentShopDataCache or not currentShopDataCache.item then return end
+    currentShopDataCache.item[itemId] = newStock
+    return DataService:Set("/game/shop/item/" .. itemId, newStock)
+end
+
+function ShopService:ForceRegenerateShop()
+    print("🛍️ [ShopService] Memaksa regenerasi toko dari Admin...")
+    self:ResetShop()
+    return true
+end
+
+function ShopService:AddItemToShop(itemId: string, stock: number)
+    if not currentShopDataCache or not currentShopDataCache.item then return end
+    currentShopDataCache.item[itemId] = stock
+    return DataService:Set("/game/shop/item/" .. itemId, stock)
+end
+
+function ShopService:UpdateChanceData(itemId: string, data: any)
+    return DataService:Update("/game/chance/" .. itemId, data)
+end
+
+function ShopService:AddItemToChance(itemId: string, data: any)
+    return DataService:Set("/game/chance/" .. itemId, data)
+end
+
+function ShopService:GetItemsData()
+    return DataService:Get("/items")
+end
+
+function ShopService:UpdateItemData(category: string, itemId: string, data: any)
+    return DataService:Update("/items/" .. category .. "/" .. itemId, data)
+end
+
+function ShopService:AddItemData(category: string, itemId: string, data: any)
+    return DataService:Set("/items/" .. category .. "/" .. itemId, data)
+end
+
 function ShopService:StartBoatMovement()
     print("🛥️ [ShopService] Memulai pergerakan perahu...")
     local assets = ReplicatedStorage:WaitForChild("assets")
@@ -228,6 +270,20 @@ end
 function ShopService:ToISO8601(timestamp: number)
     local t = os.date("!*t", timestamp) :: any
     return string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", t.year, t.month, t.day, t.hour, t.min, t.sec)
+end
+
+function ShopService:DeleteItemData(category: string, itemId: string)
+    return DataService:Delete("/items/" .. category .. "/" .. itemId)
+end
+
+function ShopService:RemoveItemFromChance(itemId: string)
+    return DataService:Delete("/game/chance/" .. itemId)
+end
+
+function ShopService:RemoveItemFromShop(itemId: string)
+    if not currentShopDataCache or not currentShopDataCache.item then return end
+    currentShopDataCache.item[itemId] = nil
+    return DataService:Delete("/game/shop/item/" .. itemId)
 end
 
 return ShopService

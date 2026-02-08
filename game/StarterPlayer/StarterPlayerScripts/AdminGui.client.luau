@@ -46,7 +46,9 @@ local CFG = {
 --// UI FACTORY & UTILS
 local function New(c, p, t) 
     local i = Instance.new(c) 
-    for k,v in pairs(t) do i[k] = v end 
+    if t then
+        for k,v in pairs(t) do i[k] = v end 
+    end
     i.Parent = p 
     return i 
 end
@@ -142,12 +144,21 @@ local function CreateHyperionInterface(parent)
         BackgroundTransparency = 1
     })
 
-    local activeTabName
+local activeTabName
+    local activeSubTabName -- Persist sub-tab for Shop
     local navButtons = {}
 
-    local function SwitchTab(tabName)
-        if activeTabName == tabName then return end
+    local SCHEMAS = {
+        Fish = {name="New Fish", price=100, rarity="common", desc="Description", exp=10, buyAble=true, typeSwim="normal", mInfoName="", mInfoScale=1, mInfoRotate=0, mDropName="", mDropScale=1, mDropRotate=0},
+        Egg = {name="New Egg", price=500, rarity="common", mInfoName="", mInfoScale=1, mInfoRotate=0},
+        Food = {name="New Food", price=10, rarity="common", desc="Description", addExp=5, addHungerCD=20, mDropName="", mDropScale=1, mDropRotate=0},
+        Mutation = {name="New Mutation", coinMultipler=1.2}
+    }
+
+    local function SwitchTab(tabName, subTabName)
+        if activeTabName == tabName and not subTabName then return end
         activeTabName = tabName
+        if subTabName then activeSubTabName = subTabName end
         
         for name, btn in pairs(navButtons) do
             local isSelected = (name == tabName)
@@ -286,6 +297,141 @@ local function CreateHyperionInterface(parent)
                 nextB.MouseButton1Click:Connect(function() currentPage=currentPage+1; renderPage() end)
                 refB.MouseButton1Click:Connect(fetchData); fetchData()
 
+            elseif tabName == "Shop" then
+                local ShopSubContent = New("Frame", Container, {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 5})
+                local SubNav = New("Frame", ShopSubContent, {Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, ZIndex = 6})
+                New("UIListLayout", SubNav, {FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5)})
+                
+                local ContentArea = New("Frame", ShopSubContent, {Size = UDim2.new(1, 0, 1, -35), Position = UDim2.fromOffset(0, 35), BackgroundTransparency = 1, ZIndex = 5})
+                local activeSub = activeSubTabName or "Cycle"
+
+                local function renderSub(subName, data)
+                    activeSubTabName = subName
+                    for _, v in pairs(ContentArea:GetChildren()) do v:Destroy() end
+                    local Scroll = New("ScrollingFrame", ContentArea, {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScrollBarThickness = 2, AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 5}); New("UIListLayout", Scroll, {Padding = UDim.new(0, 10)})
+                    New("UIPadding", Scroll, {PaddingTop = UDim.new(0, 5), PaddingBottom = UDim.new(0, 20)})
+
+                    if subName == "Cycle" then
+                        -- Cooldown
+                        local regenBtn = New("TextButton", Scroll, {Size = UDim2.new(0, 200, 0, 35), Text = "REGENERATE SHOP CYCLE", BackgroundColor3 = CFG.CLR.ERROR, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.BOLD, TextSize = 10}); ApplyCorner(regenBtn, 6)
+                        regenBtn.MouseButton1Click:Connect(function() regenBtn.Text = "..."; Remote:InvokeServer("ResetShopCooldown"):andThen(function() SwitchTab("Shop", "Cycle") end) end)
+
+                        -- List Items
+                        if data.shop and data.shop.item then
+                            for id, stock in pairs(data.shop.item) do
+                                local r = New("Frame", Scroll, {Size = UDim2.new(1, -10, 0, 45), BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(r, 6)
+                                New("TextLabel", r, {Size = UDim2.new(0.3, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = id, Font = CFG.FONT.MAIN, TextColor3 = CFG.CLR.TEXT, BackgroundTransparency = 1, TextXAlignment = 0, TextSize = 10})
+                                local inp = New("TextBox", r, {Size = UDim2.new(0, 50, 0, 28), Position = UDim2.new(0.4, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = tostring(stock), BackgroundColor3 = CFG.CLR.TERTIARY, TextColor3 = CFG.CLR.ACCENT, Font = CFG.FONT.MONO, TextSize = 10}); ApplyCorner(inp, 4)
+                                local s = New("TextButton", r, {Size = UDim2.new(0, 50, 0, 28), Position = UDim2.new(1, -115, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "SAVE", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY, Font = CFG.FONT.BOLD, TextSize = 9}); ApplyCorner(s, 4)
+                                s.MouseButton1Click:Connect(function() s.Text = "..."; Remote:InvokeServer("UpdateShopStock", id, tonumber(inp.Text) or 0):andThen(function() s.Text = "SAVE" end) end)
+                                local db = New("TextButton", r, {Size = UDim2.new(0, 50, 0, 28), Position = UDim2.new(1, -60, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "DEL", BackgroundColor3 = CFG.CLR.ERROR, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.BOLD, TextSize = 9}); ApplyCorner(db, 4)
+                                db.MouseButton1Click:Connect(function() db.Text = "..."; Remote:InvokeServer("RemoveItemFromShop", id):andThen(function() SwitchTab("Shop", "Cycle") end) end)
+                            end
+                        end
+
+                        -- Add Item Dropdown
+                        local addRow = New("Frame", Scroll, {Size = UDim2.new(1, -10, 0, 40), BackgroundTransparency = 1, ZIndex = 10})
+                        local dropBtn = New("TextButton", addRow, {Size = UDim2.new(0, 150, 1, 0), Text = "SELECT ITEM...", BackgroundColor3 = CFG.CLR.TERTIARY, TextColor3 = CFG.CLR.SUBTEXT, Font = CFG.FONT.MAIN, TextSize = 10, ZIndex = 11}); ApplyCorner(dropBtn, 6)
+                        local addStock = New("TextBox", addRow, {Size = UDim2.new(0, 50, 1, 0), Position = UDim2.fromOffset(155, 0), PlaceholderText = "STOCK", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 10, ZIndex = 11}); ApplyCorner(addStock, 6)
+                        local addB = New("TextButton", addRow, {Size = UDim2.new(0, 60, 1, 0), Position = UDim2.fromOffset(210, 0), Text = "ADD", BackgroundColor3 = CFG.CLR.ACCENT, TextColor3 = CFG.CLR.PRIMARY, Font = CFG.FONT.BOLD, TextSize = 10, ZIndex = 11}); ApplyCorner(addB, 6)
+                        
+                        -- Dropdown List parented to ShopSubContent to avoid clipping
+                        local dropList = New("ScrollingFrame", ShopSubContent, {Size = UDim2.new(0, 150, 0, 120), Position = UDim2.new(0, 30, 0, 140), BackgroundColor3 = CFG.CLR.SECONDARY, Visible = false, ZIndex = 20, AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollBarThickness = 2}); ApplyCorner(dropList, 4); ApplyStroke(dropList)
+                        New("UIListLayout", dropList)
+                        local selId = ""
+                        for id, _ in pairs(data.chance or {}) do
+                            local b = New("TextButton", dropList, {Size = UDim2.new(1, 0, 0, 28), Text = id, TextColor3 = CFG.CLR.TEXT, BackgroundTransparency = 1, Font = CFG.FONT.MAIN, TextSize = 10, ZIndex = 21}); b.MouseButton1Click:Connect(function() selId = id; dropBtn.Text = id; dropList.Visible = false end)
+                        end
+                        dropBtn.MouseButton1Click:Connect(function() dropList.Visible = not dropList.Visible end)
+                        addB.MouseButton1Click:Connect(function() if selId ~= "" then Remote:InvokeServer("AddItemToShop", selId, tonumber(addStock.Text) or 1):andThen(function() SwitchTab("Shop", "Cycle") end) end end)
+
+                    elseif subName == "Chance" then
+                        for id, cfg in pairs(data.chance or {}) do
+                            local r = New("Frame", Scroll, {Size = UDim2.new(1, -10, 0, 50), BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(r, 6)
+                            New("TextLabel", r, {Size = UDim2.new(0.25, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = id, Font = CFG.FONT.BOLD, TextColor3 = CFG.CLR.TEXT, BackgroundTransparency = 1, TextXAlignment = 0, TextSize = 9})
+                            local function miniInp(x, val, l)
+                                New("TextLabel", r, {Size = UDim2.new(0, 35, 0, 12), Position = UDim2.fromOffset(x, 5), Text = l, Font = CFG.FONT.MONO, TextSize = 7, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1})
+                                local i = New("TextBox", r, {Size = UDim2.new(0, 35, 0, 22), Position = UDim2.fromOffset(x, 20), Text = tostring(val), BackgroundColor3 = CFG.CLR.TERTIARY, TextColor3 = CFG.CLR.ACCENT, Font = CFG.FONT.MONO, TextSize = 9}); ApplyCorner(i, 4)
+                                return i
+                            end
+                            local iC = miniInp(90, cfg.chance, "CHANCE")
+                            local iMi = miniInp(130, cfg.stockMin, "MIN")
+                            local iMa = miniInp(170, cfg.stockMax, "MAX")
+                            local s = New("TextButton", r, {Size = UDim2.new(0, 45, 0, 28), Position = UDim2.new(1, -100, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "SAVE", BackgroundColor3 = CFG.CLR.ACCENT, TextColor3 = CFG.CLR.PRIMARY, Font = CFG.FONT.BOLD, TextSize = 8}); ApplyCorner(s, 6)
+                            s.MouseButton1Click:Connect(function() s.Text = "..."; Remote:InvokeServer("UpdateChanceData", id, {chance = tonumber(iC.Text) or 0, stockMin = tonumber(iMi.Text) or 0, stockMax = tonumber(iMa.Text) or 0}):andThen(function() s.Text = "SAVE" end) end)
+                            local db = New("TextButton", r, {Size = UDim2.new(0, 45, 0, 28), Position = UDim2.new(1, -50, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "DEL", BackgroundColor3 = CFG.CLR.ERROR, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.BOLD, TextSize = 8}); ApplyCorner(db, 6)
+                            db.MouseButton1Click:Connect(function() db.Text = "..."; Remote:InvokeServer("RemoveItemFromChance", id):andThen(function() SwitchTab("Shop", "Chance") end) end)
+                        end
+                        -- Add Item Row
+                        local addR = New("Frame", Scroll, {Size = UDim2.new(1, -10, 0, 40), BackgroundTransparency = 1})
+                        local ni = New("TextBox", addR, {Size = UDim2.new(0, 100, 1, 0), PlaceholderText = "NEW ID", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 10}); ApplyCorner(ni, 6)
+                        local nc = New("TextBox", addR, {Size = UDim2.new(0, 35, 1, 0), Position = UDim2.fromOffset(105, 0), PlaceholderText = "%", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 10}); ApplyCorner(nc, 6)
+                        local nmi = New("TextBox", addR, {Size = UDim2.new(0, 35, 1, 0), Position = UDim2.fromOffset(145, 0), PlaceholderText = "MIN", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 10}); ApplyCorner(nmi, 6)
+                        local nma = New("TextBox", addR, {Size = UDim2.new(0, 35, 1, 0), Position = UDim2.fromOffset(185, 0), PlaceholderText = "MAX", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.MAIN, TextSize = 10}); ApplyCorner(nma, 6)
+                        local nb = New("TextButton", addR, {Size = UDim2.new(0, 50, 1, 0), Position = UDim2.fromOffset(225, 0), Text = "ADD", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY, Font = CFG.FONT.BOLD, TextSize = 9}); ApplyCorner(nb, 6)
+                        nb.MouseButton1Click:Connect(function() if ni.Text ~= "" then Remote:InvokeServer("AddItemToChance", ni.Text, {chance = tonumber(nc.Text) or 0, stockMin = tonumber(nmi.Text) or 0, stockMax = tonumber(nma.Text) or 0}):andThen(function() SwitchTab("Shop", "Chance") end) end end)
+
+                    elseif subName == "Fish" or subName == "Egg" or subName == "Food" or subName == "Mutation" then
+                        local catData = data.items and data.items[subName] or {}
+                        for id, item in pairs(catData) do
+                            local r = New("Frame", Scroll, {Size = UDim2.new(1, -10, 0, 40), BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(r, 6)
+                            New("TextLabel", r, {Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = item.name or id, Font = CFG.FONT.MAIN, TextColor3 = CFG.CLR.TEXT, BackgroundTransparency = 1, TextXAlignment = 0, TextSize = 11})
+                            local eb = New("TextButton", r, {Size = UDim2.new(0, 50, 0, 28), Position = UDim2.new(1, -115, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "EDIT", BackgroundColor3 = CFG.CLR.TERTIARY, TextColor3 = CFG.CLR.ACCENT, Font = CFG.FONT.BOLD, TextSize = 9}); ApplyCorner(eb, 4)
+                            local db = New("TextButton", r, {Size = UDim2.new(0, 50, 0, 28), Position = UDim2.new(1, -60, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = "DEL", BackgroundColor3 = CFG.CLR.ERROR, TextColor3 = CFG.CLR.TEXT, Font = CFG.FONT.BOLD, TextSize = 9}); ApplyCorner(db, 4)
+                            
+                            db.MouseButton1Click:Connect(function() db.Text = "..."; Remote:InvokeServer("DeleteItemData", subName, id):andThen(function() SwitchTab("Shop", subName) end) end)
+                            eb.MouseButton1Click:Connect(function() 
+                                -- Simple editor for item data
+                                Scroll.Visible = false
+                                local Edit = New("Frame", ContentArea, {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1})
+                                local eSc = New("ScrollingFrame", Edit, {Size = UDim2.new(1, 0, 1, -50), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y}); New("UIListLayout", eSc, {Padding = UDim.new(0, 5)})
+                                local back = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(0, 0, 1, -40), Text = "BACK", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT}); ApplyCorner(back, 4)
+                                local save = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(1, -80, 1, -40), Text = "SAVE", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY}); ApplyCorner(save, 4)
+                                
+                                local fields = {}
+                                for k, v in pairs(item) do
+                                    if type(v) ~= "table" then
+                                        local fr = New("Frame", eSc, {Size = UDim2.new(1, -10, 0, 40), BackgroundColor3 = CFG.CLR.TERTIARY}); ApplyCorner(fr, 4)
+                                        New("TextLabel", fr, {Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = k, Font = CFG.FONT.MONO, TextSize = 10, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1, TextXAlignment = 0})
+                                        local ti = New("TextBox", fr, {Size = UDim2.new(0.5, 0, 0.7, 0), Position = UDim2.new(0.45, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = tostring(v), TextColor3 = CFG.CLR.TEXT, BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(ti, 4)
+                                        fields[k] = {ti = ti, ot = type(v)}
+                                    end
+                                end
+                                back.MouseButton1Click:Connect(function() Edit:Destroy(); Scroll.Visible = true end)
+                                save.MouseButton1Click:Connect(function()
+                                    local nd = {}
+                                    for k, f in pairs(fields) do 
+                                        local t = f.ti.Text
+                                        if f.ot == "number" then nd[k] = tonumber(t) or 0 elseif f.ot == "boolean" then nd[k] = (t:lower() == "true") else nd[k] = t end
+                                    end
+                                    Remote:InvokeServer("UpdateItemData", subName, id, nd):andThen(function() SwitchTab("Shop", subName) end)
+                                end)
+                            end)
+                        end
+                        -- Add New Item Btn
+                        local addB = New("TextButton", Scroll, {Size = UDim2.new(1, -10, 0, 35), Text = "+ ADD NEW " .. subName:upper(), BackgroundColor3 = CFG.CLR.TERTIARY, TextColor3 = CFG.CLR.ACCENT}); ApplyCorner(addB, 6)
+                        addB.MouseButton1Click:Connect(function() 
+                            local nid = "id_" .. subName:lower() .. "_" .. os.time()
+                            local schema = SCHEMAS[subName] or {name = "New " .. subName}
+                            Remote:InvokeServer("AddItemData", subName, nid, schema):andThen(function() SwitchTab("Shop", subName) end)
+                        end)
+                    end
+                end
+
+                Remote:InvokeServer("GetShopAdminData"):andThen(function(data)
+                    if not data or activeTabName ~= "Shop" then return end
+                    for _, sub in ipairs({"Cycle", "Chance", "Fish", "Egg", "Food", "Mutation"}) do
+                        local b = New("TextButton", SubNav, {Size = UDim2.new(0, 60, 1, 0), Text = sub:upper(), BackgroundColor3 = activeSub == sub and CFG.CLR.ACCENT or CFG.CLR.SECONDARY, TextColor3 = activeSub == sub and CFG.CLR.PRIMARY or CFG.CLR.SUBTEXT, Font = CFG.FONT.BOLD, TextSize = 8}); ApplyCorner(b, 4)
+                        b.MouseButton1Click:Connect(function()
+                            activeSub = sub
+                            for _, child in ipairs(SubNav:GetChildren()) do if child:IsA("TextButton") then child.BackgroundColor3 = CFG.CLR.SECONDARY; child.TextColor3 = CFG.CLR.SUBTEXT end end
+                            b.BackgroundColor3 = CFG.CLR.ACCENT; b.TextColor3 = CFG.CLR.PRIMARY
+                            renderSub(sub, data)
+                        end)
+                    end
+                    renderSub(activeSub, data)
+                end)
+
             elseif tabName == "Admin" then --// ADMIN MANAGEMENT (ADDED)
                 local admins, page, limit = {}, 1, 8
                 
@@ -331,7 +477,7 @@ local function CreateHyperionInterface(parent)
         end)
     end
 
-    for _, name in ipairs({"Overview", "Database","Admin"}) do
+    for _, name in ipairs({"Overview", "Database", "Shop", "Admin"}) do
         local btn = New("TextButton", NavScroll, {Size = UDim2.new(1, 0, 0, 42), BackgroundColor3 = Color3.new(0,0,0), BackgroundTransparency = 1, Text = ""})
         ApplyCorner(btn, 6)
         local label = New("TextLabel", btn, {Size = UDim2.new(1,-15,1,0), Position=UDim2.fromOffset(15,0), BackgroundTransparency=1, Text=name:upper(), Font=CFG.FONT.BOLD, TextColor3=CFG.CLR.SUBTEXT, TextSize=11, TextXAlignment=Enum.TextXAlignment.Left})

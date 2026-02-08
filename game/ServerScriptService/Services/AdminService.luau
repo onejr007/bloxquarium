@@ -170,14 +170,111 @@ local function handleRemoveAdmin(player, targetUserId)
     return true, "Admin berhasil dihapus!"
 end
 
--- FIX: Handler baru untuk mendapatkan data toko
-local function handleGetShopData(player)
+-- FIX: Handler baru untuk mendapatkan data toko dan probabilitas
+local function handleGetShopAdminData(player)
     if not AdminService.isAdmin(player) then return nil, "Unauthorized" end
     
     if InjectedShopService then
-        return InjectedShopService:GetCachedShopData()
+        local shop = InjectedShopService:GetCachedShopData()
+        local chance = InjectedShopService:GetChanceData():await()
+        local items = InjectedShopService:GetItemsData():await()
+        return {
+            shop = shop,
+            chance = chance,
+            items = items
+        }
     end
     return nil
+end
+
+local function handleUpdateItemData(player, category, itemId, data)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:UpdateItemData(category, itemId, data)
+        return true
+    end
+    return false
+end
+
+local function handleAddItemData(player, category, itemId, data)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:AddItemData(category, itemId, data)
+        return true
+    end
+    return false
+end
+
+local function handleUpdateShopStock(player, itemId, stock)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:UpdateShopStock(itemId, stock)
+        return true
+    end
+    return false
+end
+
+local function handleResetShopCooldown(player)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:ForceRegenerateShop()
+        return true
+    end
+    return false
+end
+
+local function handleAddItemToShop(player, itemId, stock)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:AddItemToShop(itemId, stock)
+        return true
+    end
+    return false
+end
+
+local function handleUpdateChanceData(player, itemId, data)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:UpdateChanceData(itemId, data)
+        return true
+    end
+    return false
+end
+
+local function handleAddItemToChance(player, itemId, data)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:AddItemToChance(itemId, data)
+        return true
+    end
+    return false
+end
+
+local function handleDeleteItemData(player, category, itemId)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:DeleteItemData(category, itemId)
+        return true
+    end
+    return false
+end
+
+local function handleRemoveItemFromChance(player, itemId)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:RemoveItemFromChance(itemId)
+        return true
+    end
+    return false
+end
+
+local function handleRemoveItemFromShop(player, itemId)
+    if not AdminService.isAdmin(player) then return false, "Unauthorized" end
+    if InjectedShopService then
+        InjectedShopService:RemoveItemFromShop(itemId)
+        return true
+    end
+    return false
 end
 
 --///////////////////////////////////////////////////////////////////////////
@@ -211,7 +308,17 @@ function AdminService:Init(RemoteService, DataService, ShopService) -- FIX: Mene
     InjectedRemoteService:RegisterInvoke("RequestAdminList", handleRequestAdminList)
     InjectedRemoteService:RegisterInvoke("AddAdmin", handleAddAdmin)
     InjectedRemoteService:RegisterInvoke("RemoveAdmin", handleRemoveAdmin)
-    InjectedRemoteService:RegisterInvoke("GetShopData", handleGetShopData) -- FIX: Mendaftarkan handler baru
+    InjectedRemoteService:RegisterInvoke("GetShopAdminData", handleGetShopAdminData)
+    InjectedRemoteService:RegisterInvoke("UpdateShopStock", handleUpdateShopStock)
+    InjectedRemoteService:RegisterInvoke("ResetShopCooldown", handleResetShopCooldown)
+    InjectedRemoteService:RegisterInvoke("AddItemToShop", handleAddItemToShop)
+    InjectedRemoteService:RegisterInvoke("UpdateChanceData", handleUpdateChanceData)
+    InjectedRemoteService:RegisterInvoke("AddItemToChance", handleAddItemToChance)
+    InjectedRemoteService:RegisterInvoke("UpdateItemData", handleUpdateItemData)
+    InjectedRemoteService:RegisterInvoke("AddItemData", handleAddItemData)
+    InjectedRemoteService:RegisterInvoke("DeleteItemData", handleDeleteItemData)
+    InjectedRemoteService:RegisterInvoke("RemoveItemFromChance", handleRemoveItemFromChance)
+    InjectedRemoteService:RegisterInvoke("RemoveItemFromShop", handleRemoveItemFromShop)
     
     print("👑 [AdminService] Berhasil menginisialisasi Manajemen Admin.")
 end

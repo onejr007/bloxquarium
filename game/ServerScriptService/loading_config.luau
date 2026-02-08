@@ -15,7 +15,6 @@ local Config = {
                 "Admin_ico",
                 "Close_ico",
                 "Frame_ico",
-                "UI_HOVER",
             }
         },
         {

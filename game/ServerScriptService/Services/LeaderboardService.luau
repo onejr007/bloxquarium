@@ -58,7 +58,7 @@ function LeaderboardService:Init(DataService)
 
     print("✅ [LeaderboardService v1.6] Service initialized and reactive.")
 
-    Players.PlayerAdded:Connect(function(player)
+    local function setupPlayer(player)
         print("🏆 [Leaderboard] Setting up for " .. player.Name .. "...")
         createLeaderstat(player)
         
@@ -75,7 +75,14 @@ function LeaderboardService:Init(DataService)
                 updateLeaderboard(player, data)
             end
         end)
-    end)
+    end
+
+    -- Handle existing players
+    for _, player in ipairs(Players:GetPlayers()) do
+        task.spawn(setupPlayer, player)
+    end
+
+    Players.PlayerAdded:Connect(setupPlayer)
 
     InjectedDataService.StateUpdated:Connect(function(player)
         if player then

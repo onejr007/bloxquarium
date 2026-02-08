@@ -42,31 +42,36 @@ function WorldService:Generate()
 	local sandBallRadius = sandRadius + sandBallGrowth
 	local sandBallCenter = Vector3.new(0, flatTopSandLevel - sandRadius, 0)
 	workspace.Terrain:FillBall(sandBallCenter, sandBallRadius, Enum.Material.Sand)
+	task.wait(0.1)
 
 	-- 3. Ukir Lapisan Pasir menjadi Datar
 	print("🔪 [WorldService] Mengukir pantai pasir menjadi datar...")
 	local sandCarveCFrame = CFrame.new(0, flatTopSandLevel + 50, 0) -- Pusatkan balok di atas
-	local sandCarveSize = Vector3.new(4096, 100, 4096)
+	local sandCarveSize = Vector3.new(2048, 100, 2048)
 	workspace.Terrain:FillBlock(sandCarveCFrame, sandCarveSize, Enum.Material.Air)
+	task.wait(0.1)
 
 	-- 4. Buat Bola Rumput di Atasnya (Untuk Diukir)
 	print("🌿 [WorldService] Menambahkan bola rumput mentah di atas pasir...")
 	local grassBallRadius = grassRadius + grassBallGrowth
 	local grassBallCenter = Vector3.new(0, flatTopGrassLevel - grassRadius, 0)
 	workspace.Terrain:FillBall(grassBallCenter, grassBallRadius, Enum.Material.Grass)
+	task.wait(0.1)
 	
 	-- 5. Ukir Lapisan Rumput menjadi Datar
 	print("🔪 [WorldService] Mengukir puncak rumput menjadi datar...")
 	local grassCarveCFrame = CFrame.new(0, flatTopGrassLevel + 50, 0) -- Pusatkan balok di atas
-	local grassCarveSize = Vector3.new(4096, 100, 4096)
+	local grassCarveSize = Vector3.new(2048, 100, 2048)
 	workspace.Terrain:FillBlock(grassCarveCFrame, grassCarveSize, Enum.Material.Air)
+	task.wait(0.1)
 
 	-- 6. Ciptakan Lautan: Isi dunia dengan air di sekitar pulau yang sudah terbentuk.
 	print("🌊 [WorldService] Mengisi lautan...")
 	local seaDepth = 60
-	local oceanSize = Vector3.new(4096, seaDepth, 4096)
+	local oceanSize = Vector3.new(2048, seaDepth, 2048)
 	local oceanCFrame = CFrame.new(0, seaLevel - (seaDepth / 2), 0)
 	workspace.Terrain:FillBlock(oceanCFrame, oceanSize, Enum.Material.Water)
+	task.wait(0.1)
 	
 	-- 7. Finalisasi Spawn: Posisikan SpawnLocation dengan presisi di atas area berumput.
 	print("📍 [WorldService] Menyesuaikan posisi spawn...")

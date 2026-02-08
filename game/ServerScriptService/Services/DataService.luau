@@ -34,7 +34,13 @@ local function getDefaultPlayerData()
         Gems = 0,
         Level = 1,
         XP = 0,
-        Inventory = {},
+        Inventory = {
+            Fish = {},
+            Food = {},
+            Egg = {},
+            Mutation = {}
+        },
+        AquariumFish = {}, -- Fish currently living in the aquarium
         AquariumLevel = 1,
         LastSave = os.time()
     }
@@ -206,6 +212,12 @@ function DataService:Init(injectedFirebase: any, injectedDatastore: any)
     DataStoreManager = injectedDatastore
     
     Log("DataService v4.1 Initialized with Hybrid Storage.")
+    
+    -- Handle existing players (Studio/Slow loading)
+    for _, player in ipairs(Players:GetPlayers()) do
+        task.spawn(onPlayerAdded, player)
+    end
+    
     Players.PlayerAdded:Connect(onPlayerAdded)
     Players.PlayerRemoving:Connect(onPlayerRemoving)
 

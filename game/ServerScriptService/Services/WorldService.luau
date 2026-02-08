@@ -25,7 +25,7 @@ function WorldService:Generate()
 	workspace.Terrain:Clear()
 
 	-- --- Konfigurasi Dunia ---
-	local seaLevel = 0
+	local seaLevel = 14 -- Ketinggian (Y) dari permukaan laut
 	local flatTopSandLevel = 16  -- Ketinggian (Y) dari pantai pasir
 	local flatTopGrassLevel = 18 -- Ketinggian (Y) dari area rumput (sedikit lebih tinggi)
 

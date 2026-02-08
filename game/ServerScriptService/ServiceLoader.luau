@@ -1,5 +1,5 @@
 --[[
-    ServiceLoader.luau (v1.5 - Dependency Injection Fix)
+    ServiceLoader.luau (v1.7 - Injected RemoteService to ShopService)
 ]]
 
 local ServiceLoader = {}
@@ -7,17 +7,17 @@ local ServiceLoader = {}
 local ServerScriptService = game:GetService("ServerScriptService")
 local ServicesFolder = ServerScriptService:WaitForChild("Services")
 
--- URUTAN INI SEKARANG BENAR SECARA ARSITEKTUR
 local INIT_ORDER = {
     "WorldService",
+    "ShopService",
     "FirebaseService",
     "DatabaseService",
     "DataService",         
-    "PlotService",        -- Bergantung pada DataService
-    "RemoteService",      -- Bergantung pada DataService
-    "LeaderboardService", -- Bergantung pada DataService
-    "GameActions",        -- Bergantung pada RemoteService
-    "AdminService"        -- Bergantung pada RemoteService, DataService
+    "PlotService",
+    "RemoteService",
+    "LeaderboardService",
+    "GameActions",
+    "AdminService"
 }
 
 local services = {}
@@ -46,10 +46,12 @@ function ServiceLoader:Init()
             
             local args = {}
             -- LOGIKA DEPENDENCY INJECTION
-            if serviceName == "DataService" then
+            if serviceName == "ShopService" then
+                args = {services["RemoteService"]}
+            elseif serviceName == "DataService" then
                 args = {services["FirebaseService"], services["DatabaseService"]}
-            elseif serviceName == "PlotService" then -- <<<< INI PERUBAHANNYA
-                args = {services["DataService"]} -- Suntikkan DataService ke PlotService
+            elseif serviceName == "PlotService" then
+                args = {services["DataService"]}
             elseif serviceName == "RemoteService" then
                 args = {services["DataService"]}
             elseif serviceName == "LeaderboardService" then

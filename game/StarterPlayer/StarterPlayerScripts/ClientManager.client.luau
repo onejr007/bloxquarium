@@ -1,13 +1,5 @@
 --[[
-	ClientManager.client.luau (v1.4 - Handshake Fix)
-
-	- FIXES the loading screen getting stuck forever.
-	- The previous logic had a race condition where the server could send the "WorldReady" signal before the client was ready to listen for it.
-	- This version implements a robust client-server handshake:
-	    1. The client connects all of its event listeners as before.
-	    2. It then fires a NEW event to the server: "ClientReady".
-	    3. The server will now only send "WorldReady" AFTER it receives "ClientReady".
-	- This guarantees the signal is never missed.
+	ClientManager.client.luau (v1.5 - Added ShopClient)
 ]]
 
 -- Services
@@ -19,23 +11,30 @@ local TweenService = game:GetService("TweenService")
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- Shared Modules
+-- Shared & Controller Modules
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Controllers = script.Parent:WaitForChild("Controllers") -- Path to controllers
+
 local AssetManager = require(Shared:WaitForChild("AssetManagerV3"))
 local RemoteClient = require(Shared:WaitForChild("RemoteClient"))
 local ClientState = require(Shared:WaitForChild("ClientState"))
 
-print("🚀 [ClientManager v1.4] Implementing client-server handshake.")
+-- [NEW] Require the new ShopClient controller
+local ShopClient = require(Controllers:WaitForChild("ShopClient"))
+
+print("🚀 [ClientManager v1.5] Implementing client-server handshake and controllers.")
+
+-- UI CREATION, etc. ... (code from v1.4 is unchanged)
 
 -- =======================================================================
--- 1. UI CREATION (Unchanged)
+-- 1. UI CREATION (Unchanged from v1.4)
 -- =======================================================================
 
 local screenGui, backgroundFrame, progressFill, progressText, phaseLabel
 local loadingState = { assetsReady = false, worldReady = false }
 
 local function createLoadingUI()
-	print("🎨 [ClientManager v1.4] Creating professional loading UI...")
+	-- (The extensive UI creation code remains exactly the same as v1.4)
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "LoadingScreen"
 	screenGui.ResetOnSpawn = false
@@ -113,11 +112,10 @@ local function createLoadingUI()
 	progressText.Font = Enum.Font.GothamMedium
 	progressText.Parent = progressFrame
 	screenGui.Parent = playerGui
-	print("✅ [ClientManager v1.4] UI created and parented successfully.")
 end
 
 -- =======================================================================
--- 2. UI & LOGIC CONTROLLERS (Unchanged)
+-- 2. UI & LOGIC CONTROLLERS
 -- =======================================================================
 
 local function updateProgress(loaded, total)
@@ -135,7 +133,7 @@ end
 
 local function checkCompletionAndHide()
 	if loadingState.assetsReady and loadingState.worldReady then
-		print("✅ [ClientManager v1.4] All systems go. Hiding loading screen.")
+		print("✅ [ClientManager v1.5] All systems go. Hiding loading screen.")
 		updatePhase("Welcome to Bloxquarium!")
 		task.wait(1.0)
 		local fadeInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -148,36 +146,38 @@ local function checkCompletionAndHide()
 end
 
 -- =======================================================================
--- 3. INITIALIZATION SEQUENCE (HANDSHAKE LOGIC)
+-- 3. INITIALIZATION SEQUENCE
 -- =======================================================================
 
 createLoadingUI()
 
-print("🔌 [ClientManager v1.4] Connecting to engine events...")
+print("🔌 [ClientManager v1.5] Connecting to engine events...")
 
 -- Listen for events from other modules
 AssetManager.PhaseChanged:Connect(updatePhase)
 AssetManager.PreloadProgress:Connect(updateProgress)
 
 AssetManager.PreloadComplete:Connect(function(loaded, total)
-	print("✅ [ClientManager v1.4] Asset preloading complete.")
+	print("✅ [ClientManager v1.5] Asset preloading complete.")
 	updateProgress(total, total)
 	loadingState.assetsReady = true
 	checkCompletionAndHide()
 end)
 
--- **HANDSHAKE STEP 2:** The server will send this *after* we tell it we're ready.
 RemoteClient:On("WorldReady", function()
-	print("✅ [ClientManager v1.4] 'WorldReady' signal received from server.")
+	print("✅ [ClientManager v1.5] 'WorldReady' signal received.")
 	loadingState.worldReady = true
 	checkCompletionAndHide()
 end)
 
 ClientState:OnChange(function(newState)
-	-- Ready to receive state changes.
+	-- Ready for state changes
 end)
 
--- Start the asset loading process in the background
+-- [NEW] Initialize the ShopClient controller
+ShopClient:Init()
+
+-- Start the asset loading process
 AssetManager.syncWithServerAsync():andThen(function(success)
     if success then
         AssetManager.preloadInitialAsync()
@@ -186,9 +186,9 @@ AssetManager.syncWithServerAsync():andThen(function(success)
     end
 end)
 
-print("✅ [ClientManager v1.4] Client systems configured. Notifying server.")
+print("✅ [ClientManager v1.5] Client systems configured. Notifying server.")
 
--- **HANDSHAKE STEP 1:** Tell the server we are now ready to receive events.
+-- Tell the server we are now ready
 RemoteClient:FireServer("ClientReady")
 
-print("⏳ [ClientManager v1.4] Waiting for tasks and server handshake to complete.")
+print("⏳ [ClientManager v1.5] Waiting for tasks and server handshake to complete.")

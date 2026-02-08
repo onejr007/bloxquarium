@@ -2,7 +2,7 @@
 --[=[
     @class ShopService
     Layanan ini bertanggung jawab untuk mengelola toko-toko di dalam game,
-    termasuk memunculkan dan menggerakkan toko perahu, serta me-reset item toko secara berkala. (v10.2 - Admin Integration)
+    termasuk memunculkan dan menggerakkan toko perahu, serta me-reset item toko secara berkala. (v11.0 - Database Driven)
 --]=]
 local ShopService = {}
 ShopService.Name = "ShopService"
@@ -15,10 +15,10 @@ local RemoteService: any -- Akan di-inject dari ServiceLoader
 local DataService: any     -- Akan di-inject dari ServiceLoader
 
 local SHOP_COOLDOWN = 600 -- 10 menit dalam detik
-local currentShopDataCache: any = nil -- FIX: Menambahkan cache untuk data toko
+local currentShopDataCache: any = nil 
 
 function ShopService:Init(remoteService: any, dataService: any)
-    print("⚓ [ShopService] Memulai layanan toko (v10.2 - Admin Integration)...")
+    print("⚓ [ShopService] Memulai layanan toko (v11.0 - Database Driven)...")
     RemoteService = remoteService
     DataService = dataService
 
@@ -28,7 +28,6 @@ function ShopService:Init(remoteService: any, dataService: any)
     print("✅ [ShopService] Layanan toko berhasil dimulai!")
 end
 
--- FIX: Fungsi publik baru untuk mendapatkan data dari cache
 function ShopService:GetCachedShopData()
     return currentShopDataCache
 end
@@ -127,28 +126,35 @@ end
 
 function ShopService:StartShopCycle()
     local function cycle()
+        print("🛍️ [ShopService] Mengecek status toko...")
         self:GetShopData():andThen(function(shopData: any)
-            currentShopDataCache = shopData -- Memperbarui cache setiap kali data diambil
+            local now = os.time()
+            local needsReset = false
             local remainingTime = 0
 
-            if shopData and shopData["end"] then
+            if not shopData or not shopData["end"] then
+                needsReset = true
+            else
                 local endTime = self:ParseISO8601(shopData["end"])
-                local now = os.time()
                 remainingTime = (endTime :: number) - now
+                if remainingTime <= 0 then
+                    needsReset = true
+                end
             end
 
-            if remainingTime <= 0 then
-                print("🛍️ [ShopService] Waktu toko berakhir atau data tidak ada. Mereset item toko...")
+            if needsReset then
+                print("🛍️ [ShopService] Toko kedaluwarsa atau kosong. Mereset...")
                 self:ResetShop()
-                task.wait(SHOP_COOLDOWN)
+                task.wait(30) -- Beri waktu Firebase untuk sinkronisasi sebelum siklus berikutnya
                 cycle()
             else
-                print(string.format("🛍️ [ShopService] Toko masih valid. Cooldown berikutnya dalam %d detik.", remainingTime))
-                task.wait(remainingTime)
+                currentShopDataCache = shopData
+                print(string.format("🛍️ [ShopService] Toko masih valid. Reset berikutnya dalam %d detik.", remainingTime))
+                task.wait(math.min(remainingTime, 300)) -- Cek setiap 5 menit atau saat expired
                 cycle()
             end
         end):catch(function(err: any)
-            warn("[ShopService] Gagal mendapatkan data toko di StartShopCycle. Mencoba lagi dalam 60 detik. Error: " .. tostring(err))
+            warn("[ShopService] Gagal sinkronisasi toko. Mencoba lagi dalam 60 detik. Error: " .. tostring(err))
             task.wait(60)
             cycle()
         end)
@@ -162,64 +168,66 @@ function ShopService:GetShopData()
 end
 
 function ShopService:ResetShop()
-    DataService:Get("/game"):andThen(function(gameData: any)
-        if not gameData or not gameData.chance then
-            warn("CRITICAL: [ShopService] Tidak dapat mengambil data '/game/chance' dari Firebase untuk reset toko.")
+    print("🛍️ [ShopService] Mengambil probabilitas item dari database...")
+    
+    DataService:Get("/game/chance"):andThen(function(chanceData: any)
+        if not chanceData then
+            warn("CRITICAL: [ShopService] Data '/game/chance' tidak ditemukan di database!")
             return
         end
 
         local newShopItems = {}
-        for itemId, chanceData in pairs(gameData.chance) do
-            if math.random() * 100 <= (chanceData :: any).chance then
-                local stock = math.random((chanceData :: any).stockMin, (chanceData :: any).stockMax)
+        for itemId, config in pairs(chanceData) do
+            local itemConfig = config :: any
+            if math.random() * 100 <= (itemConfig.chance or 0) then
+                local stock = math.random(itemConfig.stockMin or 1, itemConfig.stockMax or 5)
                 newShopItems[itemId] = stock
             end
         end
 
         local now = os.time()
-        local startTime = os.date("!*t", now) :: any
-        local endTime = os.date("!*t", now + SHOP_COOLDOWN) :: any
+        local startTimeISO = self:ToISO8601(now)
+        local endTimeISO = self:ToISO8601(now + SHOP_COOLDOWN)
 
         local newShopData = {
-            start = string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", startTime.year, startTime.month, startTime.day, startTime.hour, startTime.min, startTime.sec),
-            ["end"] = string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", endTime.year, endTime.month, endTime.day, endTime.hour, endTime.min, endTime.sec),
+            start = startTimeISO,
+            ["end"] = endTimeISO,
             item = newShopItems
         }
 
         DataService:Set("/game/shop", newShopData):andThen(function()
-            print("✅ [ShopService] Toko berhasil direset dengan item baru di Firebase.")
-            currentShopDataCache = newShopData -- Memperbarui cache setelah reset berhasil
+            print("✅ [ShopService] Toko berhasil diperbarui di Firebase.")
+            currentShopDataCache = newShopData
             
             for _, player in ipairs(Players:GetPlayers()) do
                 RemoteService:SendToClient(player, "ShopUpdated", newShopData)
             end
-
         end):catch(function(err: any)
-            warn("CRITICAL: [ShopService] Gagal menulis data toko baru ke Firebase. Error: " .. tostring(err))
+            warn("CRITICAL: [ShopService] Gagal menulis data toko baru! " .. tostring(err))
         end)
 
     end):catch(function(err: any)
-        warn("CRITICAL: [ShopService] Gagal mengambil data '/game' dari Firebase. Error: " .. tostring(err))
+        warn("CRITICAL: [ShopService] Gagal mengakses database '/game/chance'! " .. tostring(err))
     end)
 end
 
 function ShopService:ParseISO8601(dateTimeString: string)
     local year, month, day, hour, min, sec = dateTimeString:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)Z")
-    if not year then
-        warn("WAR: [ShopService] Gagal mem-parsing string ISO8601: " .. dateTimeString)
-        return os.time()
-    end
+    if not year then return os.time() end
     
-    local dateTable = {
+    return os.time({
         year = tonumber(year) :: number,
         month = tonumber(month) :: number,
         day = tonumber(day) :: number,
         hour = tonumber(hour) :: number,
         min = tonumber(min) :: number,
         sec = tonumber(sec) :: number
-    }
-    
-    return os.time(dateTable)
+    })
+end
+
+function ShopService:ToISO8601(timestamp: number)
+    local t = os.date("!*t", timestamp) :: any
+    return string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", t.year, t.month, t.day, t.hour, t.min, t.sec)
 end
 
 return ShopService

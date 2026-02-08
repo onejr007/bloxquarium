@@ -8,9 +8,10 @@
       firing a new `PhaseChanged` event before starting each phase.
     - This provides a much more robust and informative loading experience.
 ]]--
+--!strict
 
 local ContentProvider = game:GetService("ContentProvider")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local _ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Promise = require(script.Parent.Promise)
@@ -43,7 +44,7 @@ local readyEvent = Instance.new("BindableEvent")
 local function flattenAndRegister(config, targetRegistry)
     for category, assets in pairs(config) do
         if typeof(assets) == "table" and category ~= "CriticalAssetNames" then
-            AssetManager[category] = assets
+            (AssetManager :: any)[category] = assets
             for assetName, assetData in pairs(assets) do
                 if not targetRegistry[assetName] then
                     targetRegistry[assetName] = assetData
@@ -55,13 +56,13 @@ end
 
 -- MODIFIED: Now handles the new config structure.
 function AssetManager.syncWithServerAsync()
-    if RunService:IsServer() then return true end
-    if isInitialized then return true end
+    if RunService:IsServer() then return Promise.resolve(true) end
+    if isInitialized then return Promise.resolve(true) end
 
     print("🔍 [AssetManager v4.0] Meminta registry aset & fase pemuatan dari server...")
     
     return Promise.new(function(resolve, reject)
-        RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedPayload)
+        RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedPayload: any)
             if not receivedPayload or not receivedPayload.AssetConfig or not receivedPayload.LoadingConfig then
                 warn("[AssetManager v4.0] Gagal menerima payload konfigurasi dari server.")
                 reject("Payload was nil or malformed")

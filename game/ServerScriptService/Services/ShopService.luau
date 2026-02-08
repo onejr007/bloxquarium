@@ -11,13 +11,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local RemoteService -- Akan di-inject dari ServiceLoader
-local DataService     -- Akan di-inject dari ServiceLoader
+local RemoteService: any -- Akan di-inject dari ServiceLoader
+local DataService: any     -- Akan di-inject dari ServiceLoader
 
 local SHOP_COOLDOWN = 600 -- 10 menit dalam detik
-local currentShopDataCache = nil -- FIX: Menambahkan cache untuk data toko
+local currentShopDataCache: any = nil -- FIX: Menambahkan cache untuk data toko
 
-function ShopService:Init(remoteService, dataService)
+function ShopService:Init(remoteService: any, dataService: any)
     print("⚓ [ShopService] Memulai layanan toko (v10.2 - Admin Integration)...")
     RemoteService = remoteService
     DataService = dataService
@@ -35,16 +35,20 @@ end
 
 function ShopService:StartBoatMovement()
     print("🛥️ [ShopService] Memulai pergerakan perahu...")
-    local perahuModel = ReplicatedStorage:WaitForChild("assets"):WaitForChild("models"):WaitForChild("M_NPC"):WaitForChild("Perahu_shop")
+    local assets = ReplicatedStorage:WaitForChild("assets")
+    local models = assets:WaitForChild("models")
+    local npcModels = models:WaitForChild("M_NPC")
+    local perahuModel = npcModels:WaitForChild("Perahu_shop") :: Model?
+    
     if not perahuModel then
         warn("WAR: [ShopService] Gagal menemukan model 'Perahu_shop'.")
         return
     end
 
-    local perahuInstance = perahuModel:Clone()
+    local perahuInstance = perahuModel:Clone() :: Model
     perahuInstance.Name = "PerahuShopInstance"
 
-    local primaryPart = perahuInstance:FindFirstChild("Klop")
+    local primaryPart = perahuInstance:FindFirstChild("Klop") :: BasePart?
     if not primaryPart then
         warn("CRITICAL: [ShopService] Tidak dapat menemukan PrimaryPart 'Klop'.")
         perahuInstance:Destroy()
@@ -99,14 +103,14 @@ function ShopService:StartBoatMovement()
             local rotationOffset = CFrame.Angles(0, math.rad(90), 0)
             local rollRotation = CFrame.Angles(0, 0, zRoll)
 
-            perahuInstance:SetPrimaryPartCFrame(CFrame.new(newPosition, lookAtPosition) * rotationOffset * rollRotation)
+            perahuInstance:PivotTo(CFrame.new(newPosition, lookAtPosition) * rotationOffset * rollRotation)
         end
     end)
 
-    prompt.Triggered:Connect(function(player)
+    prompt.Triggered:Connect(function(player: Player)
         print(string.format("🛍️ [ShopService] Pemain '%s' membuka toko perahu.", player.Name))
         isMoving = false
-        self:GetShopData():andThen(function(shopData)
+        self:GetShopData():andThen(function(shopData: any)
             if shopData then
                 RemoteService:SendToClient(player, "OpenShopGUI", shopData)
             else
@@ -115,7 +119,7 @@ function ShopService:StartBoatMovement()
         end)
     end)
 
-    RemoteService:Register("ResumeBoatMovement", function(player)
+    RemoteService:Register("ResumeBoatMovement", function(player: Player)
         print(string.format("🛥️ [ShopService] Menerima sinyal dari klien '%s'. Perahu kembali bergerak.", player.Name))
         isMoving = true
     end)
@@ -123,14 +127,14 @@ end
 
 function ShopService:StartShopCycle()
     local function cycle()
-        self:GetShopData():andThen(function(shopData)
+        self:GetShopData():andThen(function(shopData: any)
             currentShopDataCache = shopData -- Memperbarui cache setiap kali data diambil
             local remainingTime = 0
 
             if shopData and shopData["end"] then
                 local endTime = self:ParseISO8601(shopData["end"])
                 local now = os.time()
-                remainingTime = endTime - now
+                remainingTime = (endTime :: number) - now
             end
 
             if remainingTime <= 0 then
@@ -143,7 +147,7 @@ function ShopService:StartShopCycle()
                 task.wait(remainingTime)
                 cycle()
             end
-        end):catch(function(err)
+        end):catch(function(err: any)
             warn("[ShopService] Gagal mendapatkan data toko di StartShopCycle. Mencoba lagi dalam 60 detik. Error: " .. tostring(err))
             task.wait(60)
             cycle()
@@ -158,7 +162,7 @@ function ShopService:GetShopData()
 end
 
 function ShopService:ResetShop()
-    DataService:Get("/game"):andThen(function(gameData)
+    DataService:Get("/game"):andThen(function(gameData: any)
         if not gameData or not gameData.chance then
             warn("CRITICAL: [ShopService] Tidak dapat mengambil data '/game/chance' dari Firebase untuk reset toko.")
             return
@@ -166,15 +170,15 @@ function ShopService:ResetShop()
 
         local newShopItems = {}
         for itemId, chanceData in pairs(gameData.chance) do
-            if math.random() * 100 <= chanceData.chance then
-                local stock = math.random(chanceData.stockMin, chanceData.stockMax)
+            if math.random() * 100 <= (chanceData :: any).chance then
+                local stock = math.random((chanceData :: any).stockMin, (chanceData :: any).stockMax)
                 newShopItems[itemId] = stock
             end
         end
 
         local now = os.time()
-        local startTime = os.date("!*t", now)
-        local endTime = os.date("!*t", now + SHOP_COOLDOWN)
+        local startTime = os.date("!*t", now) :: any
+        local endTime = os.date("!*t", now + SHOP_COOLDOWN) :: any
 
         local newShopData = {
             start = string.format("%04d-%02d-%02dT%02d:%02d:%02dZ", startTime.year, startTime.month, startTime.day, startTime.hour, startTime.min, startTime.sec),
@@ -190,29 +194,32 @@ function ShopService:ResetShop()
                 RemoteService:SendToClient(player, "ShopUpdated", newShopData)
             end
 
-        end):catch(function(err)
+        end):catch(function(err: any)
             warn("CRITICAL: [ShopService] Gagal menulis data toko baru ke Firebase. Error: " .. tostring(err))
         end)
 
-    end):catch(function(err)
+    end):catch(function(err: any)
         warn("CRITICAL: [ShopService] Gagal mengambil data '/game' dari Firebase. Error: " .. tostring(err))
     end)
 end
 
-function ShopService:ParseISO8601(dateTimeString)
+function ShopService:ParseISO8601(dateTimeString: string)
     local year, month, day, hour, min, sec = dateTimeString:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)Z")
     if not year then
         warn("WAR: [ShopService] Gagal mem-parsing string ISO8601: " .. dateTimeString)
         return os.time()
     end
-    return os.time({
-        year = tonumber(year),
-        month = tonumber(month),
-        day = tonumber(day),
-        hour = tonumber(hour),
-        min = tonumber(min),
-        sec = tonumber(sec)
-    })
+    
+    local dateTable = {
+        year = tonumber(year) :: number,
+        month = tonumber(month) :: number,
+        day = tonumber(day) :: number,
+        hour = tonumber(hour) :: number,
+        min = tonumber(min) :: number,
+        sec = tonumber(sec) :: number
+    }
+    
+    return os.time(dateTable)
 end
 
 return ShopService

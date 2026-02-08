@@ -1,5 +1,5 @@
 --[[
-    ServiceLoader.luau (v1.7 - Injected RemoteService to ShopService)
+    ServiceLoader.luau (v2.0 - ShopService Injection for Admin)
 ]]
 
 local ServiceLoader = {}
@@ -9,15 +9,15 @@ local ServicesFolder = ServerScriptService:WaitForChild("Services")
 
 local INIT_ORDER = {
     "WorldService",
-    "ShopService",
     "FirebaseService",
     "DatabaseService",
-    "DataService",         
-    "PlotService",
+    "DataService",
     "RemoteService",
+    "ShopService",
+    "PlotService",
     "LeaderboardService",
     "GameActions",
-    "AdminService"
+    "AdminService" -- AdminService tetap terakhir agar service lain bisa di-inject
 }
 
 local services = {}
@@ -45,9 +45,11 @@ function ServiceLoader:Init()
             print(string.format("   -> Initializing service: %s", serviceName))
             
             local args = {}
-            -- LOGIKA DEPENDENCY INJECTION
-            if serviceName == "ShopService" then
-                args = {services["RemoteService"]}
+            -- FIX: Logika Dependency Injection diperbarui untuk AdminService
+            if serviceName == "AdminService" then
+                 args = {services["RemoteService"], services["DataService"], services["ShopService"]} -- Menambahkan ShopService
+            elseif serviceName == "ShopService" then
+                args = {services["RemoteService"], services["DataService"]}
             elseif serviceName == "DataService" then
                 args = {services["FirebaseService"], services["DatabaseService"]}
             elseif serviceName == "PlotService" then
@@ -58,8 +60,6 @@ function ServiceLoader:Init()
                 args = {services["DataService"]}
             elseif serviceName == "GameActions" then
                 args = {services["RemoteService"]}
-            elseif serviceName == "AdminService" then
-                 args = {services["RemoteService"], services["DataService"]}
             end
 
             local success, err = pcall(service.Init, service, unpack(args))

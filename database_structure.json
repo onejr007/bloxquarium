@@ -1,0 +1,183 @@
+{
+  "admins": [
+    90101532
+  ],
+  "game": {
+    "shop": {
+      "end": "2026-02-08T10:15:10Z",
+      "start": "2026-02-08T09:15:10Z",
+      "item": {
+        "id_egg1": 34,
+        "id_fish1": 1,
+        "id_fish2": 87,
+        "id_food1": 5621
+      }
+    },
+    "chance": {
+      "id_egg1": {
+        "chance": 70,
+        "stockMin": 1,
+        "stockMax": 99
+      },
+      "id_fish1": {
+        "chance": 10,
+        "stockMin": 1,
+        "stockMax": 999
+      },
+      "id_fish2": {
+        "chance": 25,
+        "stockMin": 1,
+        "stockMax": 999
+      },
+      "id_food1": {
+        "chance": 30,
+        "stockMin": 1,
+        "stockMax": 99999
+      }
+    }
+  },
+  "items": {
+    "Egg": {
+      "id_egg1": {
+        "mInfoName": "TelurBiasaInfo",
+        "mInfoRotate": 0,
+        "mInfoScale": 1.2,
+        "name": "Telur Biasa",
+        "price": 100,
+        "rarity": "common",
+        "reward": {
+          "id_fish1": {
+            "chance": 0.8
+          },
+          "id_fish2": {
+            "chance": 0.2
+          }
+        }
+      }
+    },
+    "Fish": {
+      "id_fish1": {
+        "buyAble": true,
+        "desc": "Ikan guppy yang lincah.",
+        "exp": 10,
+        "expFood": 0,
+        "isFood": false,
+        "mDropName": "GuppyDrop",
+        "mDropRotate": 0,
+        "mDropScale": 0.5,
+        "mInfoName": "GuppyInfo",
+        "mInfoRotate": 0,
+        "mInfoScale": 1,
+        "name": "Guppy",
+        "price": 50,
+        "rarity": "common",
+        "stateFish": {
+          "Adult": {
+            "baseSpeed": 12,
+            "coinCD": 90,
+            "coinVal": 5,
+            "dropType": "coin",
+            "expGrowth": 200,
+            "hungerCD": 45
+          },
+          "Baby": {
+            "baseSpeed": 10,
+            "coinCD": 120,
+            "coinVal": 1,
+            "dropType": "coin",
+            "expGrowth": 100,
+            "hungerCD": 60
+          },
+          "Old": {
+            "baseSpeed": 8,
+            "coinCD": 60,
+            "coinVal": 2,
+            "dropType": "coin",
+            "expGrowth": 0,
+            "hungerCD": 30
+          }
+        },
+        "typeSwim": "normal"
+      },
+      "id_fish2": {
+        "buyAble": true,
+        "desc": "Ikan piranha yang ganas.",
+        "exp": 50,
+        "expFood": 0,
+        "isFood": false,
+        "mDropName": "PiranhaDrop",
+        "mDropRotate": 0,
+        "mDropScale": 0.7,
+        "mInfoName": "PiranhaInfo",
+        "mInfoRotate": 0,
+        "mInfoScale": 1.5,
+        "name": "Piranha",
+        "price": 200,
+        "rarity": "rare",
+        "stateFish": {
+          "Adult": {
+            "baseSpeed": 18,
+            "coinCD": 70,
+            "coinVal": 15,
+            "dropType": "coin",
+            "expGrowth": 400,
+            "hungerCD": 35
+          },
+          "Baby": {
+            "baseSpeed": 15,
+            "coinCD": 100,
+            "coinVal": 5,
+            "dropType": "coin",
+            "expGrowth": 200,
+            "hungerCD": 50
+          },
+          "Old": {
+            "baseSpeed": 12,
+            "coinCD": 50,
+            "coinVal": 7,
+            "dropType": "coin",
+            "expGrowth": 0,
+            "hungerCD": 25
+          }
+        },
+        "typeSwim": "agressive"
+      }
+    },
+    "Food": {
+      "id_food1": {
+        "addExp": 5,
+        "addHungerCD": 20,
+        "addMutation": {
+          "mutation1": {
+            "chance": 0.1
+          }
+        },
+        "desc": "Makanan ikan biasa.",
+        "mDropName": "PeletIkanDrop",
+        "mDropRotate": 0,
+        "mDropScale": 0.5,
+        "mInfoName": "PeletIkan",
+        "mInfoRotate": 0,
+        "mInfoScale": 1,
+        "name": "Pelet",
+        "price": 10,
+        "rarity": "common"
+      }
+    },
+    "Mutation": {
+      "id_mutation1": {
+        "coinMultipler": 1.5,
+        "name": "Glowing"
+      }
+    }
+  },
+  "players": {
+    "9002653829": {
+      "AquariumLevel": 3,
+      "Coins": 444,
+      "Gems": 0,
+      "Level": 5,
+      "XP": 0
+    }
+  }
+}

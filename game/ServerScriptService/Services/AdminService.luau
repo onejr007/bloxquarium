@@ -1,9 +1,10 @@
 --[[
-    AdminService.luau (v6.0 - Admin Management)
+    AdminService.luau (v6.1 - Shop Data Integration)
     - Integrasi penuh dengan Firebase via Injected DataService.
     - Sistem Antrean (Queue) untuk menangani pengecekan admin sebelum cache siap.
     - Penanganan penambahan admin via Name (Offline/Online) atau UserID.
     - Zero Hardcoded Requires (Dependency Injection via :Init).
+    - NEW: Menambahkan endpoint "GetShopData" untuk GUI Admin.
 ]]
 
 local Players = game:GetService("Players")
@@ -11,6 +12,7 @@ local Players = game:GetService("Players")
 --=================[ SERVICES ]=================--
 local InjectedRemoteService
 local InjectedDataService
+local InjectedShopService -- FIX: Menambahkan ShopService
 
 --=================[ CONFIGURATION ]=================--
 local AdminService = {}
@@ -168,6 +170,16 @@ local function handleRemoveAdmin(player, targetUserId)
     return true, "Admin berhasil dihapus!"
 end
 
+-- FIX: Handler baru untuk mendapatkan data toko
+local function handleGetShopData(player)
+    if not AdminService.isAdmin(player) then return nil, "Unauthorized" end
+    
+    if InjectedShopService then
+        return InjectedShopService:GetCachedShopData()
+    end
+    return nil
+end
+
 --///////////////////////////////////////////////////////////////////////////
 --// PUBLIC API
 --///////////////////////////////////////////////////////////////////////////
@@ -181,11 +193,12 @@ end
 --// INITIALIZATION
 --///////////////////////////////////////////////////////////////////////////
 
-function AdminService:Init(RemoteService, DataService)
+function AdminService:Init(RemoteService, DataService, ShopService) -- FIX: Menerima ShopService
     InjectedRemoteService = RemoteService
     InjectedDataService = DataService
+    InjectedShopService = ShopService -- FIX: Menyimpan referensi ShopService
     
-    if not InjectedRemoteService or not InjectedDataService then
+    if not InjectedRemoteService or not InjectedDataService or not InjectedShopService then
         warn("🔥 [AdminService] Service yang diperlukan tidak ditemukan!")
         return
     end
@@ -198,6 +211,7 @@ function AdminService:Init(RemoteService, DataService)
     InjectedRemoteService:RegisterInvoke("RequestAdminList", handleRequestAdminList)
     InjectedRemoteService:RegisterInvoke("AddAdmin", handleAddAdmin)
     InjectedRemoteService:RegisterInvoke("RemoveAdmin", handleRemoveAdmin)
+    InjectedRemoteService:RegisterInvoke("GetShopData", handleGetShopData) -- FIX: Mendaftarkan handler baru
     
     print("👑 [AdminService] Berhasil menginisialisasi Manajemen Admin.")
 end

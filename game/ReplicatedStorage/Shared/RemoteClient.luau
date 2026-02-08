@@ -23,7 +23,14 @@ local function initializeFromServerListener()
     print("✅ [RemoteClient] Server channels found. Connection established.")
 
     remoteEvent.OnClientEvent:Connect(function(eventData)
-        if type(eventData) ~= "table" or not eventData.eventName then return end
+        if type(eventData) ~= "table" then return end
+        
+        -- Support for legacy direct-state updates if eventName is missing
+        if not eventData.eventName then
+            -- If it's just state data, we don't handle it here, 
+            -- but we also don't block other listeners (like ClientState).
+            return 
+        end
         
         local handlers = serverEventHandlers[eventData.eventName]
         if handlers then

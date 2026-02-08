@@ -15,6 +15,7 @@ local INIT_ORDER = {
     "RemoteService",
     "ShopService",
     "PlotService",
+    "UnderwaterService",
     "LeaderboardService",
     "GameActions",
     "AdminService" -- AdminService tetap terakhir agar service lain bisa di-inject
@@ -53,7 +54,9 @@ function ServiceLoader:Init()
             elseif serviceName == "DataService" then
                 args = {services["FirebaseService"], services["DatabaseService"]}
             elseif serviceName == "PlotService" then
-                args = {services["DataService"]}
+                args = {services["DataService"], services["RemoteService"], services["UnderwaterService"]}
+            elseif serviceName == "UnderwaterService" then
+                args = {services["DataService"], services["RemoteService"]}
             elseif serviceName == "RemoteService" then
                 args = {services["DataService"]}
             elseif serviceName == "LeaderboardService" then

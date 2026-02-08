@@ -5,13 +5,16 @@ local Players = game:GetService("Players")
 local _ServerScriptService = game:GetService("ServerScriptService")
 
 local InjectedDataService: any
+local InjectedRemoteService: any
+local InjectedUnderwaterService: any
 
 local PlotService = {}
 PlotService.ServiceName = "PlotService"
 
 PlotService.plots = {}
 PlotService.unownedPlots = {}
-PlotService.playerPlots = {}
+PlotService.playerPlots = {} -- {[Player] = Model}
+PlotService.plotOwners = {} -- {[Model] = Player}
 
 local PLOT_COUNT = 50
 local WORLD_RADIUS = 200
@@ -19,10 +22,24 @@ local PLOT_AREA_RADIUS = WORLD_RADIUS - 50
 local PLOT_Y_LEVEL = 21
 local GRASS_Y_LEVEL = 18
 
-function PlotService:Init(DataService: any)
+function PlotService:Init(DataService: any, RemoteService: any, UnderwaterService: any)
     InjectedDataService = DataService
+    InjectedRemoteService = RemoteService
+    InjectedUnderwaterService = UnderwaterService
     print("🏝️ [PlotService] Initializing Plot Service...")
     self:GeneratePlots()
+
+    if InjectedRemoteService then
+        InjectedRemoteService:Register("RequestEnterAquarium", function(player: Player, plotModel: Model)
+            local owner = self.plotOwners[plotModel]
+            if owner then
+                if InjectedUnderwaterService then
+                    InjectedUnderwaterService:PrepareAquariumForPlayer(player, owner, plotModel)
+                end
+                InjectedRemoteService:SendToClient(player, "EnterAquariumSequence", owner, plotModel)
+            end
+        end)
+    end
 
     if InjectedDataService and InjectedDataService.StateUpdated then
         InjectedDataService.StateUpdated:Connect(function(player: Player)
@@ -82,6 +99,26 @@ function PlotService:GeneratePlots()
     end
 end
 
+function PlotService:RefreshPrompt(plot: Model, owner: Player)
+    local prompt = plot:FindFirstChild("PlotPrompt") or Instance.new("ProximityPrompt")
+    prompt.Name = "PlotPrompt"
+    prompt.ObjectText = owner.Name .. "'s Aquarium"
+    prompt.ActionText = "View Aquarium"
+    prompt.HoldDuration = 0.5
+    prompt.MaxActivationDistance = 15
+    prompt.RequiresLineOfSight = false
+    prompt.Parent = plot.PrimaryPart or plot:FindFirstChildWhichIsA("BasePart")
+    
+    -- The connection is handled once per plot model
+    if not plot:GetAttribute("PromptConnected") then
+        prompt.Triggered:Connect(function(player)
+            -- Send the interaction to the client controller
+            InjectedRemoteService:SendToClient(player, "RequestEnterAquariumClient", plot, owner)
+        end)
+        plot:SetAttribute("PromptConnected", true)
+    end
+end
+
 -- DIPERBAIKI: Fungsi ini sekarang HANYA menugaskan plot, tidak menteleportasi.
 function PlotService:AssignPlotToPlayer(player: Player)
     if self.playerPlots[player] then return end -- Sudah punya plot
@@ -91,6 +128,8 @@ function PlotService:AssignPlotToPlayer(player: Player)
         table.remove(self.unownedPlots, randomIndex)
         assignedPlot.Name = "Plot_" .. player.Name
         self.playerPlots[player] = assignedPlot
+        self.plotOwners[assignedPlot] = player
+        self:RefreshPrompt(assignedPlot, player)
         print(string.format("   -> [AssignPlot] Plot '%s' ditugaskan ke %s.", assignedPlot.Name, player.Name))
     end
 end
@@ -123,6 +162,11 @@ function PlotService:UpdateAquariumModel(player: Player, currentPlot: Model?)
         if p then newPlot.PrimaryPart = p else newPlot:Destroy(); return nil end
     end
     newPlot:PivotTo(oldPivot); newPlot:SetAttribute("ModelName", desiredModelName)
+    
+    self.playerPlots[player] = newPlot
+    self.plotOwners[newPlot] = player
+    self:RefreshPrompt(newPlot, player)
+    
     return newPlot
 end
 

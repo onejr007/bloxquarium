@@ -383,22 +383,31 @@ local activeTabName
                             eb.MouseButton1Click:Connect(function() 
                                 -- Simple editor for item data
                                 Scroll.Visible = false
-                                local Edit = New("Frame", ContentArea, {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1})
-                                local eSc = New("ScrollingFrame", Edit, {Size = UDim2.new(1, 0, 1, -50), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y}); New("UIListLayout", eSc, {Padding = UDim.new(0, 5)})
-                                local back = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(0, 0, 1, -40), Text = "BACK", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT}); ApplyCorner(back, 4)
-                                local save = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(1, -80, 1, -40), Text = "SAVE", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY}); ApplyCorner(save, 4)
+                                local Edit = New("Frame", Container, {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ZIndex = 100})
+                                local eSc = New("ScrollingFrame", Edit, {Size = UDim2.new(1, 0, 1, -50), BackgroundTransparency = 1, AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 101}); New("UIListLayout", eSc, {Padding = UDim.new(0, 5)})
+                                local back = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(0, 0, 1, -40), Text = "BACK", BackgroundColor3 = CFG.CLR.SECONDARY, TextColor3 = CFG.CLR.TEXT, ZIndex = 102}); ApplyCorner(back, 4)
+                                local save = New("TextButton", Edit, {Size = UDim2.new(0, 80, 0, 30), Position = UDim2.new(1, -80, 1, -40), Text = "SAVE", BackgroundColor3 = CFG.CLR.SUCCESS, TextColor3 = CFG.CLR.PRIMARY, ZIndex = 102}); ApplyCorner(save, 4)
                                 
                                 local fields = {}
-                                for k, v in pairs(item) do
-                                    if type(v) ~= "table" then
-                                        local fr = New("Frame", eSc, {Size = UDim2.new(1, -10, 0, 40), BackgroundColor3 = CFG.CLR.TERTIARY}); ApplyCorner(fr, 4)
-                                        New("TextLabel", fr, {Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = k, Font = CFG.FONT.MONO, TextSize = 10, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1, TextXAlignment = 0})
-                                        local ti = New("TextBox", fr, {Size = UDim2.new(0.5, 0, 0.7, 0), Position = UDim2.new(0.45, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = tostring(v), TextColor3 = CFG.CLR.TEXT, BackgroundColor3 = CFG.CLR.SECONDARY}); ApplyCorner(ti, 4)
-                                        fields[k] = {ti = ti, ot = type(v)}
+                                local schema = SCHEMAS[subName] or {}
+                                -- Merge schema keys with current item keys to show all possible fields
+                                local allKeys = {}
+                                for k, _ in pairs(schema) do allKeys[k] = true end
+                                for k, _ in pairs(item) do allKeys[k] = true end
+
+                                for k, _ in pairs(allKeys) do
+                                    local v = item[k]
+                                    if v == nil then v = schema[k] end
+                                    if type(v) ~= "table" and k ~= "id" then -- Don't edit ID field if it exists in data
+                                        local fr = New("Frame", eSc, {Size = UDim2.new(1, -10, 0, 40), BackgroundColor3 = CFG.CLR.TERTIARY, ZIndex = 103}); ApplyCorner(fr, 4)
+                                        New("TextLabel", fr, {Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(10, 0), Text = k, Font = CFG.FONT.MONO, TextSize = 10, TextColor3 = CFG.CLR.SUBTEXT, BackgroundTransparency = 1, TextXAlignment = 0, ZIndex = 104})
+                                        local ti = New("TextBox", fr, {Size = UDim2.new(0.5, 0, 0.7, 0), Position = UDim2.new(0.45, 0, 0.5, 0), AnchorPoint = Vector2.new(0, 0.5), Text = tostring(v), TextColor3 = CFG.CLR.TEXT, BackgroundColor3 = CFG.CLR.SECONDARY, ZIndex = 104}); ApplyCorner(ti, 4)
+                                        fields[k] = {ti = ti, ot = type(v or schema[k])}
                                     end
                                 end
                                 back.MouseButton1Click:Connect(function() Edit:Destroy(); Scroll.Visible = true end)
                                 save.MouseButton1Click:Connect(function()
+                                    save.Text = "..."
                                     local nd = {}
                                     for k, f in pairs(fields) do 
                                         local t = f.ti.Text

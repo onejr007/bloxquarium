@@ -27,6 +27,7 @@ local T_INFO = TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.
 -- [STATE]
 local activeCards: { [string]: Frame } = {}
 local timerConn: RBXScriptConnection? = nil
+local distanceCheckConn: RBXScriptConnection? = nil
 
 -- [HELPERS]
 local function log(msg: string) print(`[SHOP_AAA] {os.date("%X")} | {msg}`) end
@@ -142,6 +143,7 @@ function ShopClient:Init()
 	local function toggle(state: boolean)
 		if not state then 
 			if timerConn then timerConn:Disconnect(); timerConn = nil end
+			if distanceCheckConn then distanceCheckConn:Disconnect(); distanceCheckConn = nil end
 			REMOTE_CLIENT:FireServer("ResumeBoatMovement")
 		end
 		
@@ -154,10 +156,34 @@ function ShopClient:Init()
 		if not state then t.Completed:Wait(); sg.Enabled = false else sg.Enabled = true end
 	end
 
+	-- [NEW] Auto-close if far from boat
+	local function startDistanceCheck(boatModel: Model)
+		if distanceCheckConn then distanceCheckConn:Disconnect() end
+		distanceCheckConn = RunService.Heartbeat:Connect(function()
+			if not sg.Enabled then 
+				if distanceCheckConn then distanceCheckConn:Disconnect(); distanceCheckConn = nil end 
+				return 
+			end
+			local char = PLAYER.Character
+			if not char or not boatModel.PrimaryPart then return end
+			
+			local dist = (char:GetPivot().Position - boatModel:GetPivot().Position).Magnitude
+			if dist > 35 then -- Threshold to close
+				toggle(false)
+			end
+		end)
+	end
+
 	close.MouseButton1Click:Connect(function() toggle(false) end)
 
 	REMOTE_CLIENT:On("OpenShopGUI", function(data: any)
 		toggle(true)
+		
+		-- Try to find boat for distance check
+		local boat = workspace:FindFirstChild("PerahuShopInstance")
+		if boat and boat:IsA("Model") then
+			startDistanceCheck(boat)
+		end
 		log("Processing Shop Data...")
 
 		local endTs = os.time() + 3600

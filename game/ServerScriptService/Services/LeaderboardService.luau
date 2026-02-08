@@ -62,10 +62,19 @@ function LeaderboardService:Init(DataService)
         print("🏆 [Leaderboard] Setting up for " .. player.Name .. "...")
         createLeaderstat(player)
         
-        local initialData = InjectedDataService:Get(player)
-        if initialData then
-            updateLeaderboard(player, initialData)
-        end
+        -- Wait for data to be loaded if not already present
+        task.spawn(function()
+            local data = InjectedDataService:Get(player)
+            local timeout = 0
+            while not data and timeout < 10 do
+                task.wait(0.5)
+                data = InjectedDataService:Get(player)
+                timeout += 0.5
+            end
+            if data then
+                updateLeaderboard(player, data)
+            end
+        end)
     end)
 
     InjectedDataService.StateUpdated:Connect(function(player)

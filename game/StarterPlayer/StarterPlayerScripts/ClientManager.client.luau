@@ -19,8 +19,9 @@ local AssetManager = require(Shared:WaitForChild("AssetManagerV3"))
 local RemoteClient = require(Shared:WaitForChild("RemoteClient"))
 local ClientState = require(Shared:WaitForChild("ClientState"))
 
--- [NEW] Require the new ShopClient controller
+-- [NEW] Require controllers
 local ShopClient = require(Controllers:WaitForChild("ShopClient"))
+local PlotController = require(Controllers:WaitForChild("PlotController"))
 
 print("🚀 [ClientManager v1.5] Implementing client-server handshake and controllers.")
 

@@ -21,9 +21,16 @@ function ShopService:Init(remoteService: any, dataService: any)
     print("⚓ [ShopService] Memulai layanan toko (v11.0 - Database Driven)...")
     RemoteService = remoteService
     DataService = dataService
+    self.playersInShop = {} -- {[Player]: boolean}
 
     self:StartBoatMovement()
     self:StartShopCycle()
+
+    Players.PlayerRemoving:Connect(function(player)
+        if self.playersInShop[player] then
+            self.playersInShop[player] = nil
+        end
+    end)
 
     print("✅ [ShopService] Layanan toko berhasil dimulai!")
 end
@@ -122,6 +129,13 @@ function ShopService:StartBoatMovement()
             if isMoving then
                 local angleChange = math.rad(DEGREES_PER_SECOND) * deltaTime
                 angle = (angle + angleChange) % (math.pi * 2)
+            else
+                -- Check if still anyone in shop, if not, resume
+                local count = 0
+                for _ in pairs(self.playersInShop) do count += 1 end
+                if count == 0 then
+                    isMoving = true
+                end
             end
 
             local bobbleHeight = 0.2
@@ -150,6 +164,7 @@ function ShopService:StartBoatMovement()
 
     prompt.Triggered:Connect(function(player: Player)
         print(string.format("🛍️ [ShopService] Pemain '%s' membuka toko perahu.", player.Name))
+        self.playersInShop[player] = true
         isMoving = false
         self:GetShopData():andThen(function(shopData: any)
             if shopData then
@@ -161,8 +176,8 @@ function ShopService:StartBoatMovement()
     end)
 
     RemoteService:Register("ResumeBoatMovement", function(player: Player)
-        print(string.format("🛥️ [ShopService] Menerima sinyal dari klien '%s'. Perahu kembali bergerak.", player.Name))
-        isMoving = true
+        print(string.format("🛥️ [ShopService] Menerima sinyal dari klien '%s'.", player.Name))
+        self.playersInShop[player] = nil
     end)
 end
 
@@ -219,12 +234,24 @@ function ShopService:ResetShop()
         end
 
         local newShopItems = {}
-        for itemId, config in pairs(chanceData) do
-            local itemConfig = config :: any
-            if math.random() * 100 <= (itemConfig.chance or 0) then
-                local stock = math.random(itemConfig.stockMin or 1, itemConfig.stockMax or 5)
-                newShopItems[itemId] = stock
+        local chanceList = {}
+        for id, cfg in pairs(chanceData) do
+            table.insert(chanceList, {id = id, cfg = cfg})
+        end
+
+        -- Ensure at least 2 items if possible
+        local attempts = 0
+        while next(newShopItems) == nil or (#(function() local t={} for k in pairs(newShopItems) do table.insert(t,k) end return t end)()) < 2 do
+            for _, entry in ipairs(chanceList) do
+                local itemId = entry.id
+                local itemConfig = entry.cfg
+                if math.random() * 100 <= (itemConfig.chance or 0) then
+                    local stock = math.random(itemConfig.stockMin or 1, itemConfig.stockMax or 10)
+                    newShopItems[itemId] = stock
+                end
             end
+            attempts += 1
+            if attempts > 5 then break end -- Avoid infinite loop
         end
 
         local now = os.time()

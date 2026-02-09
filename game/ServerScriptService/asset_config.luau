@@ -30,11 +30,13 @@ return {
         Admin_ico = "rbxassetid://80033067852103",
         Close_ico = "rbxassetid://132966276978826",
         Frame_ico = "rbxassetid://109429151935511",
+        Shop_BACKGROUND ="rbxassetid://102151919452993",
 
         -- Gameplay & Items
 		Coin_ico = "rbxassetid://120673611252447",
         Coin1_ico = "rbxassetid://92342444032080",
         Fish_ico = "rbxassetid://103155001392232",
+        Egg_ico = "rbxassetid://70688476970062",
         
     },
 
@@ -58,19 +60,25 @@ return {
         -- Item
         COIN = "M_Item/Coin",
         COIN1 = "M_Item/Coin1",
-    },
 
-    Game = {
-        -- Fish Store
-        SHOP_ITEM_1 = { id = "rbxassetid://10676998516", price = 100 },
-        SHOP_ITEM_2 = { id = "rbxassetid://10677189255", price = 250 },
-        SHOP_ITEM_3 = { id = "rbxassetid://5073599420", price = 500 },
-
-        -- Decorations
-        DECOR_1 = { id = "rbxassetid://10676998516" },
-        DECOR_2 = { id = "rbxassetid://10677189255" },
-
-        -- Effects
-        EFFECT_SPAWN = { id = "rbxassetid://5073599420" }
-    },
+        
+        -- Egg
+        Biasa = "M_Egg/Biasa",
+        Langka = "M_Egg/Langka",
+        Epik = "M_Egg/Epik",
+        
+        -- Food
+        Pellet1 = "M_Food/Pellet1",
+        Pill1 = "M_Food/Pill1",
+        Pill2 = "M_Food/Pill2",
+        Worm1 = "M_Food/Worm1",
+        Worm2 = "M_Food/Worm2",
+        Worm3 = "M_Food/Worm3",
+        Worm4 = "M_Food/Worm4",
+        
+        -- Pet
+        Crab = "M_Pet/Crab",
+        Jellyfish = "M_Pet/Jellyfish",
+        Snail1 = "M_Pet/Snail1",
+    }
 }

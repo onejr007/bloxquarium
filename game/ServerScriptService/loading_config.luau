@@ -24,18 +24,16 @@ local Config = {
                 "Coin_ico",
                 "Coin1_ico",
                 "Fish_ico",
-                "SHOP_ITEM_1",
-                "SHOP_ITEM_2",
-                "SHOP_ITEM_3",
+                "Egg_ico",
+                "Shop_BACKGROUND",
             }
         },
         {
             PhaseName = "Dunia & Dekorasi",
-            Description = "Model dan efek dalam game yang akan muncul di akuarium pemain.",
+            Description = "Aset lingkungan dan efek akuarium.",
             AssetNames = {
-                "DECOR_1",
-                "DECOR_2",
-                "EFFECT_SPAWN",
+                "BUBBLE",
+                "FISH_SPAWN",
             }
         },
     },

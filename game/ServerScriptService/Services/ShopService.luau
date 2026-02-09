@@ -11,6 +11,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
+local Promise = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Promise"))
+
 local RemoteService: any -- Akan di-inject dari ServiceLoader
 local DataService: any     -- Akan di-inject dari ServiceLoader
 
@@ -22,6 +24,13 @@ function ShopService:Init(remoteService: any, dataService: any)
     RemoteService = remoteService
     DataService = dataService
     self.playersInShop = {} -- {[Player]: boolean}
+
+    -- Seeding check
+    self:GetItemsData():andThen(function(data)
+        if not data then
+            warn("⚠️ [ShopService] Database '/items' kosong! Toko tidak akan menampilkan item.")
+        end
+    end)
 
     self:StartBoatMovement()
     self:StartShopCycle()
@@ -79,6 +88,78 @@ end
 
 function ShopService:AddItemData(category: string, itemId: string, data: any)
     return DataService:Set("/items/" .. category .. "/" .. itemId, data)
+end
+
+function ShopService:GetResolvedShopPayload(): any
+    return Promise.all({
+        self:GetShopData(),
+        self:GetItemsData()
+    }):andThen(function(results: any)
+        local shopData = results[1]
+        local itemsData = results[2]
+        
+        print("🔍 [ShopService] Memulai resolusi data toko...")
+        
+        if not shopData then 
+            warn("❌ [ShopService] GetResolvedShopPayload: shopData is NIL from DataService.")
+            return nil
+        end
+        
+        if not itemsData then 
+            warn("❌ [ShopService] GetResolvedShopPayload: itemsData is NIL from DataService.")
+            return nil
+        end
+
+        local resolvedItems = {}
+        local itemMap = shopData.item or {}
+        
+        print(string.format("   -> [Info] Ditemukan %d item di stok toko.", (function() local c=0 for _ in pairs(itemMap) do c+=1 end return c end)()))
+        
+        for id, stock in pairs(itemMap) do
+            if typeof(id) ~= "string" then continue end
+            if id == "start" or id == "end" then continue end
+
+            local details = nil
+            local foundCategory = nil
+            
+            for categoryName, categoryItems in pairs(itemsData) do
+                if typeof(categoryItems) == "table" and categoryItems[id] then
+                    details = categoryItems[id]
+                    foundCategory = categoryName
+                    break
+                end
+            end
+            
+            if details and foundCategory then
+                print(string.format("   -> [Resolved] ID: %s | Kategori: %s | Model: %s", id, foundCategory, tostring(details.mInfoName)))
+                table.insert(resolvedItems, {
+                    id = id,
+                    stock = stock,
+                    category = foundCategory,
+                    details = {
+                        name = details.name or id,
+                        mInfoName = details.mInfoName or "ModelMissing",
+                        price = details.price or 0,
+                        rarity = details.rarity or "common",
+                        description = details.desc or ""
+                    }
+                })
+            else
+                warn(string.format("⚠️ [ShopService] Item ID '%s' ditemukan di stok toko tapi TIDAK ada di database items!", id))
+            end
+        end
+
+        print(string.format("✅ [ShopService] Berhasil meresolusi %d item.", #resolvedItems))
+
+        return {
+            endTime = shopData["end"],
+            startTime = shopData.start,
+            items = resolvedItems
+        }
+    end):catch(function(err)
+        warn("❌ [ShopService] Error saat meresolusi payload toko: " .. tostring(err))
+        return nil
+    end)
 end
 
 function ShopService:StartBoatMovement()
@@ -166,12 +247,15 @@ function ShopService:StartBoatMovement()
         print(string.format("🛍️ [ShopService] Pemain '%s' membuka toko perahu.", player.Name))
         self.playersInShop[player] = true
         isMoving = false
-        self:GetShopData():andThen(function(shopData: any)
-            if shopData then
-                RemoteService:SendToClient(player, "OpenShopGUI", shopData)
+        
+        self:GetResolvedShopPayload():andThen(function(payload: any)
+            if payload then
+                RemoteService:SendToClient(player, "OpenShopGUI", payload)
             else
-                warn("WAR: [ShopService] Gagal mengirim data toko ke klien karena tidak ada datanya.")
+                warn("WAR: [ShopService] Gagal mengirim data toko ke klien karena data tidak lengkap.")
             end
+        end):catch(function(err)
+            warn("WAR: [ShopService] Error saat mengambil data toko: " .. tostring(err))
         end)
     end)
 
@@ -264,15 +348,20 @@ function ShopService:ResetShop()
             item = newShopItems
         }
 
-        DataService:Set("/game/shop", newShopData):andThen(function()
+        Promise.all({
+            DataService:Set("/game/shop", newShopData)
+        }):andThen(function()
+            return self:GetResolvedShopPayload()
+        end):andThen(function(payload: any)
+            if not payload then error("Gagal generate payload") end
             print("✅ [ShopService] Toko berhasil diperbarui di Firebase.")
             currentShopDataCache = newShopData
             
             for _, player in ipairs(Players:GetPlayers()) do
-                RemoteService:SendToClient(player, "ShopUpdated", newShopData)
+                RemoteService:SendToClient(player, "OpenShopGUI", payload)
             end
         end):catch(function(err: any)
-            warn("CRITICAL: [ShopService] Gagal menulis data toko baru! " .. tostring(err))
+            warn("CRITICAL: [ShopService] Gagal menulis atau mengirim data toko baru! " .. tostring(err))
         end)
 
     end):catch(function(err: any)
@@ -301,16 +390,6 @@ end
 
 function ShopService:DeleteItemData(category: string, itemId: string)
     return DataService:Delete("/items/" .. category .. "/" .. itemId)
-end
-
-function ShopService:RemoveItemFromChance(itemId: string)
-    return DataService:Delete("/game/chance/" .. itemId)
-end
-
-function ShopService:RemoveItemFromShop(itemId: string)
-    if not currentShopDataCache or not currentShopDataCache.item then return end
-    currentShopDataCache.item[itemId] = nil
-    return DataService:Delete("/game/shop/item/" .. itemId)
 end
 
 return ShopService

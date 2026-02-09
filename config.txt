@@ -1,0 +1,909 @@
+local Config = {
+
+	-- AQUARIUM
+	AQUARIUM_SIZE = Vector3.new(20, 15, 10),
+	GLASS_THICKNESS = 0.5,
+
+	-- PLOT SYSTEM
+	NUM_PLOTS = 8,
+	PLOT_SPACING = 28,
+	SPAWN_OFFSET = Vector3.new(0, 5, 8),
+
+	-- GUI SYSTEM
+	GUI_TANK_RATIO = 0.85,
+	GUI_TOOLBAR_RATIO = 0.15,
+	GUI_DISPLAY_ORDER = 100,
+
+	-- PROXIMITY PROMPT
+	PROMPT_MAX_DISTANCE = 12,
+	PROMPT_HOLD_DURATION = 0,
+
+	-- BASE STATS
+	BASE = {
+		FishCooldownMax = 30,
+		FishExpMax = 2000000
+	},
+
+	-- FISH SYSTEM
+	FISH = {
+		SIZES = {
+			Baby = 0.2,
+			Adult = 0.4,
+			Old = 0.6
+		},
+
+		SPECIES = {
+			Guppy = {
+				name = "Guppy",
+				rarity = "Biasa",
+				price = 100,
+				hungerCooldownMax = 7,
+				expMax = 2000,
+				infoScale = 0.14,
+				modelRotation = {0, -90, 0},
+				description = "Ikan guppy (Poecilia reticulata) adalah spesies ikan hias air tawar tropis berukuran kecil yang sangat populer karena warna-warninya yang cerah",
+				zBoost = 0,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 0, 0},
+				markerRotation = -90,
+				markerFlip = false,
+				typeSwim = 2,
+				buyAble = true,
+				isFood = true,
+				expFood = 100,
+				Baby = {
+					hungerCooldown = 20,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 1.2,
+					expGrowth = 0,
+					itemType = "",
+				},
+
+				Adult = {
+					hungerCooldown = 30,
+					coinCooldown = 6,
+					coinValue = 100,
+					baseSpeed = 1,
+					bubbleRate = 5,
+					expGrowth = 1000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinCooldown = 5,
+					coinValue = 500,
+					baseSpeed = 0.8,
+					bubbleRate = 10,
+					expGrowth = 2000,
+					itemType = "Coin",
+					--Coin,Diamond,Zamrud,Emerald,Luck
+				}
+			},
+			Goldfish = {
+				name = "Ikan Emas",
+				rarity = "Tidak Biasa",
+				price = 500,
+				hungerCooldownMax = 7,
+				expMax = 15000,
+				infoScale = 0.1,
+				modelRotation = {0, 0, 0},
+				description = "Ikan Emas adalah spesies ikan air tawar yang memiliki ciri khas berupa tubuh yang tebal, berwarna emas, dengan kepala yang menonjol",
+				zBoost = 0,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 90, 0},
+				markerRotation = 0,
+				markerFlip = false,
+				typeSwim = 2,
+				itemType = "Coin",
+				buyAble = true,
+				expFood = 250,
+				Baby = {
+					hungerCooldown = 20,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 1.2,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 30,
+					coinCooldown = 6,
+					coinValue = 200,
+					baseSpeed = 1,
+					bubbleRate = 5,
+					expGrowth = 1500,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinCooldown = 5,
+					coinValue = 1000,
+					baseSpeed = 0.8,
+					bubbleRate = 10,
+					expGrowth = 2500,
+					itemType = "Coin",
+				}
+			},
+			Piranha = {
+				name = "Piranha",
+				rarity = "Tidak Biasa",
+				price = 1000,
+				hungerCooldownMax = 7,
+				expMax = 2000,
+				infoScale = 0.14,
+				modelRotation = {0, 0, 0},
+				description = "Ikan pemakan daging adalah jenis ikan air tawar yang terkenal karena kecenderungannya untuk memakan hewan yang lebih kecil atau bahkan yang sama jenisnya.",
+				zBoost = 0,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 90, 0},
+				markerRotation = 0,
+				markerFlip = false,
+				typeSwim = 2,
+				buyAble = true,
+				foodTarget = {"Guppy","Goldfish"},
+				mutationChance = 25,
+				Baby = {
+					hungerCooldown = 20,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 1,
+					expGrowth = 0,
+					itemType = "Diamond",
+				},
+
+				Adult = {
+					hungerCooldown = 30,
+					coinCooldown = 6,
+					coinValue = 5000,
+					baseSpeed = 0.8,
+					bubbleRate = 5,
+					expGrowth = 1000,
+					itemType = "Diamond",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinCooldown = 5,
+					coinValue = 20000,
+					baseSpeed = 0.6,
+					bubbleRate = 10,
+					expGrowth = 5000,
+					itemType = "Diamond",
+					--Coin,Diamond,Zamrud,Emerald,Luck
+				}
+			},
+			MaidFish = {
+				name = "Ikan Mermaid",
+				rarity = "Langka",
+				price = 100,
+				hungerCooldownMax = 7,
+				expMax = 20000,
+				infoScale = 0.14,
+				modelRotation = {0, -90, 0},
+				description = "Jarang dilihat tetapi sangat lucu",
+				zBoost = 0,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 0, 0},
+				markerRotation = -90,
+				markerFlip = false,
+				typeSwim = 2,
+				itemType = "Diamond",
+				buyAble = false,
+				Baby = {
+					hungerCooldown = 20,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 2,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 30,
+					coinCooldown = 6,
+					coinValue = 100,
+					baseSpeed = 1,
+					bubbleRate = 5,
+					expGrowth = 2000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinCooldown = 5,
+					coinValue = 500,
+					baseSpeed = 0.5,
+					bubbleRate = 10,
+					expGrowth = 4000,
+					itemType = "Coin",
+				}
+			},
+			ZombieFish = {
+				name = "Ikan Zombie",
+				rarity = "Langka",
+				price = 100,
+				hungerCooldownMax = 7,
+				expMax = 20000,
+				infoScale = 0.18,
+				modelRotation = {0, -90, 0},
+				description = "Ganas sering memangsa ikan kecil",
+				zBoost = 0,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 0, 0},
+				markerRotation = -90,
+				markerFlip = false,
+				typeSwim = 2,
+				itemType = "Zamrud",
+				buyAble = false,
+				Baby = {
+					hungerCooldown = 20,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 2,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 30,
+					coinCooldown = 6,
+					coinValue = 100,
+					baseSpeed = 1,
+					bubbleRate = 5,
+					expGrowth = 1000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinCooldown = 5,
+					coinValue = 500,
+					baseSpeed = 0.5,
+					bubbleRate = 10,
+					expGrowth = 2000,
+					itemType = "Coin",
+				}
+			},
+			Badut = {
+				name = "Badut",
+				rarity = "Langka",
+				price = 1111,
+				hungerCooldownMax = 7,
+				expMax = 10000,
+				expCurrent = 5000,
+				infoScale = 0.18,
+				modelRotation = {0, -90, 0},
+				description = "Ikan Test",
+				zBoost = 1,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = "LEFT",
+				markerRotation = 0,
+				markerFlip = true,
+				typeSwim = 2,
+				itemType = "Coin",
+				buyAble = false,
+
+				Baby = {
+					hungerCooldown = 10,
+					coinCooldown = 7,
+					coinValue = 0,
+					baseSpeed = 6,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 15,
+					coinCooldown = 6,
+					coinValue = 100,
+					baseSpeed = 4,
+					bubbleRate = 5,
+					expGrowth = 1000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 20,
+					coinCooldown = 5,
+					coinValue = 500,
+					baseSpeed = 2,
+					bubbleRate = 10,
+					expGrowth = 2000,
+					itemType = "Coin",
+				}
+			},
+			Axolotl = {
+				name = "Axolotl",
+				rarity = "Epik",
+				price = 100000,
+				hungerCooldownMax = 7,
+				expMax = 10000,
+				expCurrent = 5000,
+				infoScale = 0.9,
+				modelRotation = {0, -90, 0},
+				description = "Ikan Test",
+				zBoost = 0.18,
+				flip = false,
+				rotationY = 0,
+				markerOrientation = {0, 0, 0},
+				markerRotation = -90,
+				markerFlip = false,
+				typeSwim = 2,
+				itemType = "Diamond",
+				buyAble = true,
+				Baby = {
+					hungerCooldown = 45,
+					coinValue = 0,
+					baseSpeed = 6,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 50,
+					coinValue = 1000,
+					baseSpeed = 4,
+					expGrowth = 5000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinValue = 2000,
+					baseSpeed = 2,
+					expGrowth = 10000,
+					itemType = "Coin",
+				}
+			},
+			Lucky = {
+				name = "Lucky",
+				rarity = "Legenda",
+				price = 1111,
+				hungerCooldownMax = 7,
+				expMax = 10000,
+				expCurrent = 5000,
+				infoScale = 0.18,
+				modelRotation = {0, -90, 0},
+				description = "Ikan Test",
+				zBoost = 0.12,
+				flip = true,
+				rotationY = -90,
+				markerOrientation = {0, -90, 0},
+				markerRotation = 0,
+				markerFlip = false,
+				typeSwim = 2,
+				itemType = "Luck",
+				buyAble = false,
+				Baby = {
+					hungerCooldown = 60,
+					coinValue = 1,
+					baseSpeed = 6,
+					expGrowth = 0,
+					itemType = "Coin",
+				},
+
+				Adult = {
+					hungerCooldown = 60,
+					coinValue = 1,
+					baseSpeed = 4,
+					expGrowth = 5000,
+					itemType = "Coin",
+				},
+
+				Old = {
+					hungerCooldown = 60,
+					coinValue = 1,
+					baseSpeed = 2,
+					expGrowth = 10000,
+					itemType = "Coin",
+				}
+			}
+		}
+	},
+
+	-- EGG SYSTEM
+	EGGFISH = {
+		RARITY = {
+			Biasa = {
+				id = "Biasa",
+				name = "Telur Biasa",
+				rarity = "Biasa",
+				price = 100,
+				infoScale = 0.1,
+				modelRotation = {0, 0, 0},
+				chance = {
+					Biasa = 25,
+					TidakBiasa = 15,
+					Epik = 5
+				},
+				fish = {
+					Guppy = { chance = 70 },
+					Goldfish = { chance = 35 },
+					Piranha = { chance = 15 }
+				}
+			},
+
+			TidakBiasa = {
+				id = "TidakBiasa",
+				name = "Telur Langka",
+				rarity = "Tidak Biasa",
+				modelRotation = {0, 0, 0},
+				price = 1000,
+				infoScale = 0.1,
+				chance = {
+					Biasa = 15,
+					TidakBiasa = 25,
+					Epik = 10,
+					Legenda = 5
+				},
+				fish = {
+					Guppy = { chance = 15 },
+					Test = { chance = 15 },
+					Test2 = { chance = 15 },
+					Cupang = { chance = 25 },
+					Cupang2 = { chance = 25 },
+					Badut = { chance = 25 },
+					Axolotl = { chance = 10 },
+					Lucky = { chance = 5 }
+				}
+			},
+
+			Epik = {
+				id = "Epik",
+				name = "Telur Epik",
+				rarity = "Epik",
+				modelRotation = {0, 0, 0},
+				price = 1000,
+				infoScale = 0.1,
+				chance = {
+					Biasa = 10,
+					TidakBiasa = 15,
+					Epik = 30,
+					Legenda = 25
+				},
+				fish = {
+					Cupang = { chance = 10 },
+					Cupang2 = { chance = 10 },
+					Badut = { chance = 15 },
+					Axolotl = { chance = 30 },
+					Lucky = { chance = 25 }
+				}
+			}
+		}
+	},
+
+	-- FOOD SYSTEM
+	FOODFISH = {
+		pelet2 = {
+			modelsName = "m_pelet2",
+			modelsScale = 0.05,
+			name = "Pellet Organik",
+			rarity = "Biasa",
+			price = 15,
+			addHungerCooldown = 1,
+			addExp = 25,
+			infoScale = 0.8,
+			description = "Pelet ikan dengan campuran bahan organik sedikit mengurangi rasa lapar ikan.",
+			modelRotation = {0, 0, 0},
+			addMutation = {
+				Shiny = { chance = 1 }
+			}
+		},
+
+		Pill1 = {
+			modelsName = "Pill1",
+			modelsScale = 0.4,
+			name = "Meat Pill",
+			rarity = "Tidak Biasa",
+			price = 25,
+			addHungerCooldown = -2,
+			addExp = 50,
+			infoScale = 0.2,
+			description = "Gumpalan daging sedikit beracun",
+			modelRotation = {90, 90, 0},
+			addMutation = {
+				Poison = { chance = 5 },
+			}
+		},
+
+		Pill2 = {
+			modelsName = "Pill2",
+			modelsScale = 0.03,
+			name = "Lab Pill",
+			rarity = "Epik",
+			price = 1000,
+			addHungerCooldown = 0.1,
+			addExp = 250,
+			infoScale = 0.02,
+			description = "Pill dengan campuran bahan hasil laboratorium",
+			modelRotation = {0, 0, 0},
+			addMutation = {
+				Rainbow = { chance = 5 },
+				Electro = { chance = 1 },
+			}
+		},
+
+		Worm1 = {
+			modelsName = "Worm1",
+			modelsScale = 0.01,
+			name = "Cacing Berduri",
+			rarity = "Langka",
+			price = 50,
+			addHungerCooldown = 3,
+			addExp = 50,
+			infoScale = 0.02,
+			description = "Cacing ini memberikan ikan anda mutasi berduri",
+			modelRotation = {0, 0, 0},
+			addMutation = {
+				Spikes = { chance = 10 },
+			}
+		},
+		Worm3 = {
+			modelsName = "Worm3",
+			modelsScale = 0.01,
+			name = "Cacing",
+			rarity = "Langka",
+			price = 50,
+			addHungerCooldown = 5,
+			addExp = 50,
+			infoScale = 1,
+			description = "Cacing segar meningkatkan daya tahan tubuh ikan anda",
+			modelRotation = {0, -90, 0},
+			addMutation = {
+				Electro = { chance = 1 },
+			}
+		}
+	},
+	
+	MUTATION={
+		Spikes={coinMultipler=1.1},
+		Shiny={coinMultipler=1.2},
+		Poison={coinMultipler=1.3},
+		Rainbow={coinMultipler=1.4},
+		Electro={coinMultipler=1.5},
+	},
+	-- BOSS SYSTEM
+	BOSS = {
+		Level1 = {
+			name = "MEGMA Lv.1",
+			health = 1,
+			fishLock = 1,
+			fishKillCooldown = 10,
+			exitCooldown = 60,
+			spawnChance = 80,
+			baseSpeed = 0.4,
+			scale = 1,
+			reward = {
+				eggDrop = {
+					Biasa = {
+						eggVal = 0,
+						chance = 50,
+						click = 5
+					},
+					TidakBiasa = {
+						eggVal = 0,
+						chance = 5,
+						click = 10
+					},
+				},
+				coinDrop = {
+					coin1 = { coinValue = 50, chance = 80, click = 1 },
+					coin2 = { coinValue = 100, chance = 50, click = 1 },
+					coin3 = { coinValue = 500, chance = 25, click = 1 },
+				},
+				diamondDrop = {
+					diamond1 = { coinValue = 2000, chance = 15, click = 3 },
+				},
+				zamrudDrop = {
+					zamrud1 = { coinValue = 5000, chance = 10, click = 5 },
+				},
+				emeraldDrop = {
+					emerald1 = { coinValue = 50000, chance = 1, click = 20 },
+				},
+				luckDrop = {
+					luck1 = { coinValue = 1, chance = 0, click = 3 },
+				},
+			}
+		},
+
+		Level2 = {
+			name = "Octopus Lv.2",
+			health = 1,
+			fishLock = 1,
+			fishKillCooldown = 10,
+			exitCooldown = 60,
+			spawnChance = 60,
+			baseSpeed = 0.8,
+			scale = 1,
+			reward = {
+				eggDrop = {
+					Biasa = {
+						eggVal = 0,
+						chance = 40,
+						click = 1
+					},
+					TidakBiasa = {
+						eggVal = 0,
+						chance = 40,
+						click = 5
+					},
+					Epik = {
+						eggVal = 0,
+						chance = 5,
+						click = 20
+					},
+				},
+				coinDrop = {
+					coin1 = { coinValue = 50, chance = 30, click = 1 },
+					coin2 = { coinValue = 100, chance = 60, click = 1 },
+					coin3 = { coinValue = 500, chance = 60, click = 1 },
+				},
+				diamondDrop = {
+					diamond1 = { coinValue = 2000, chance = 20, click = 3 },
+				},
+				zamrudDrop = {
+					zamrud1 = { coinValue = 5000, chance = 5, click = 5 },
+				},
+				emeraldDrop = {
+					emerald1 = { coinValue = 50000, chance = 1, click = 20 },
+				},
+				luckDrop = {
+					luck1 = { coinValue = 1, chance = 0, click = 3 },
+				},
+			}
+		},
+		Event1 = {
+			name = "BLOOD MOON",
+			health = 10000,
+			fishLock = 0,
+			fishKillCooldown = 99999999,
+			exitCooldown = 300,
+			spawnChance = 0,
+			baseSpeed = 0.1,
+			scale = 1,
+			reward = {
+				eggDrop = {
+					Epik = {
+						eggVal = 0,
+						chance = 50,
+						click = 5
+					}
+				},
+				coinDrop = {
+					coin1 = { coinValue = 500, chance = 50, click = 1 },
+				},
+				diamondDrop = {
+					diamond1 = { coinValue = 2000, chance = 50, click = 3 },
+				},
+				zamrudDrop = {
+					zamrud1 = { coinValue = 5000, chance = 25, click = 5 },
+				},
+				emeraldDrop = {
+					emerald1 = { coinValue = 50000, chance = 15, click = 10 },
+				},
+				luckDrop = {
+					luck1 = { coinValue = 1, chance = 0, click = 3 },
+				},
+			}
+		},
+	},
+	BOSS_SPAWN_COOLDOWN = 180,
+	BONUS_TIME = 13,
+	PET = {
+		Snail1 = {
+			abilityID = "P1",
+			abilityCooldown = 0,
+			abilityDamage = 0,
+			abilitySpeed = 0.3,
+			price = 10000,
+			robux = 0,
+			typeSwim = 1,
+			scale = 0.15,
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+			petRotation = {0, 0, 0},
+			fixedZ = 2,
+		},
+		Jellyfish = {
+			abilityID = "P1",
+			abilityCooldown = 0,
+			abilityDamage = 0,
+			abilitySpeed = 0.6,
+			price = 100000,
+			robux = 0,
+			typeSwim = 2,
+			scale = 0.005,
+			infoScale = 0.005,
+			infoRotation = {0, 0, 0},
+			petRotation = {0, 130, 0},
+			fixedZ = 2,
+		},
+		SwordFish = {
+			abilityID = "P4",
+			abilityCooldown = 1,
+			abilityDamage = 25,
+			abilitySpeed = 1.2,
+			price = 5000,
+			robux = 0,
+			typeSwim = 2,
+			scale = 0.014,
+			infoScale = 0.2,
+			infoRotation = {0, -90, 0},
+			petRotation = {0, -90, 0},
+			fixedZ = 1,
+		},
+		Crab = {
+			abilityID = "P4",
+			abilityCooldown = 1,
+			abilityDamage = 50,
+			abilitySpeed = 1.2,
+			price = 200000,
+			robux = 0,
+			typeSwim = 1,
+			scale = 0.2,
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+			petRotation = {0, 0, 0},
+			fixedZ = 2,
+		},
+		SeaHorse = {
+			abilityID = "P2",
+			abilityCooldown = 3,
+			abilityDamage = 0,
+			abilitySpeed = 0.6,
+			abilityFoodModel = "pelet2",
+			price = 100000,
+			robux = 0,
+			typeSwim = 2,
+			scale = 0.25,
+			infoScale = 0.1,
+			infoRotation = {0, 0, 0},
+			petRotation = {0, -90, 0},
+			fixedZ = 2,
+		},
+		SeaHorse2 = {
+			abilityID = "P2",
+			abilityCooldown = 5,
+			abilityDamage = 0,
+			abilitySpeed = 0.6,
+			abilityFoodModel = "Pill1",
+			price = 250000,
+			robux = 0,
+			typeSwim = 2,
+			scale = 0.1,
+			infoScale = 0.03,
+			infoRotation = {0, 0, 0},
+			petRotation = {0, -90, 0},
+			fixedZ = 2,
+		},
+		SeaHorse3 = {
+			abilityID = "P2",
+			abilityCooldown = 1,
+			abilityDamage = 0,
+			abilitySpeed = 0.6,
+			abilityFoodModel = "Random",
+			price = 1000000,
+			robux = 499,
+			typeSwim = 2,
+			scale = 0.1,
+			infoScale = 0.03,
+			infoRotation = {0, -90, 0},
+			petRotation = {0, -90, 0},
+			fixedZ = 2,
+		},
+	},
+	
+	PET_ABILITY ={
+		P1 = {
+			abilityText = "Auto Collect Coin",
+		},
+		P2 = {
+			abilityText = "Auto Feeding",
+		},
+		P3 = {
+			abilityText = "Auto Breeding",
+		},
+		P4 = {
+			abilityText = "Auto Attack Boss",
+		},
+		P5 = {
+			abilityText = "Auto Drop Egg",
+		},
+	},
+	
+	Clicker = {
+		Level1 = {
+			imageid = "rbxassetid://94422933421027",
+			clickAuto = false,
+			clickDamage = 100,
+			rarity = "Biasa",
+			requiredUpgrade = {
+				ownedCoin = 10000,
+				killBoss = 1,
+				ownedFish = {
+				},
+			},
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+		},
+		Level2 = {
+			imageid = "rbxassetid://76632866695851",
+			clickAuto = false,
+			clickDamage = 150,
+			rarity = "Tidak Biasa",
+			requiredUpgrade = {
+				ownedCoin = 10000,
+				killBoss = 1,
+				ownedFish = {
+					Guppy = {
+						Old = {
+							Shiny= 1
+						}
+					}	
+				},
+			},
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+		},
+		Level3 = {
+			imageid = "rbxassetid://74409249841108",
+			clickAuto = false,
+			clickDamage = 300,
+			rarity = "Langka",
+			requiredUpgrade = {
+				ownedCoin = 100000,
+				killBoss = 10,
+				ownedFish = {
+					Guppy = {
+						Rainbow = 1
+					},
+					Goldfish = {
+						All = 10
+					},
+				},
+			},
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+		},
+		Level4 = {
+			imageid = "rbxassetid://86159523224827",
+			clickAuto = true,
+			clickDamage = 200,
+			rarity = "Epik",
+			-- UPDATE SOON (MAX)
+			requiredUpgrade = {
+				ownedCoin = 1000000,
+				killBoss = 50,
+				ownedFish = {
+					Goldfish = {
+						All = 5
+					},
+					Piranha = {
+						Rainbow = 5
+					}
+				},
+			},
+			infoScale = 0.5,
+			infoRotation = {0, 0, 0},
+		},
+	},
+	-- DROP ANIMATION
+	DROP = {
+		dropDuration = 3.5,
+		startHeight = 20,
+		startZ = 3.8,
+		safetyMargin = 0.5
+	},
+
+	DEBUG_MODE = true
+}

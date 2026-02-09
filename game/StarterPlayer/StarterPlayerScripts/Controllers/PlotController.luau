@@ -6,6 +6,7 @@ local RunService = game:GetService("RunService")
 
 local Remote = require(ReplicatedStorage.Shared.RemoteClient)
 local ClientState = require(ReplicatedStorage.Shared.ClientState)
+local Assets = require(ReplicatedStorage.Shared.AssetManagerV3)
 
 local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -15,12 +16,16 @@ local PlotController = {}
 local UNDERWATER_POS = Vector3.new(5000, -100, 5000)
 local isInteracting = false
 
--- ASSETS
-local FRAME_ICO = "rbxassetid://109429151935511"
-local MENU_ICO = "rbxassetid://79113340093791"
-local FISH_ICO = "rbxassetid://103155001392232"
-local CLOSE_ICO = "rbxassetid://132966276978826"
-local COIN_ICO = "rbxassetid://120673611252447"
+-- ASSETS - Will be loaded when assets are ready
+local FRAME_ICO, MENU_ICO, FISH_ICO, CLOSE_ICO, COIN_ICO
+
+local function loadAssets()
+    FRAME_ICO = Assets.get("Frame_ico") or ""
+    MENU_ICO = Assets.get("Menu_ico") or ""
+    FISH_ICO = Assets.get("Fish_ico") or ""
+    CLOSE_ICO = Assets.get("Close_ico") or ""
+    COIN_ICO = Assets.get("Coin_ico") or ""
+end
 
 local function setControlsEnabled(enabled: boolean)
     local char = Player.Character
@@ -63,6 +68,17 @@ local function createLoadingScreen()
 end
 
 local function createUnderwaterGui(onClose)
+    -- Ensure assets are loaded before creating GUI
+    if not Assets.IsReady() then
+        warn("[PlotController] Assets not ready when creating underwater GUI!")
+        return
+    end
+    
+    -- Load assets if not already loaded
+    if not FRAME_ICO then
+        loadAssets()
+    end
+    
     local sg = Instance.new("ScreenGui")
     sg.Name = "UnderwaterGui"
     sg.ResetOnSpawn = false
@@ -484,11 +500,33 @@ function PlotController:StartEnterSequence(owner: Player, plotModel: Model)
     
     task.wait(1.0) -- Simulate loading
     
-    -- 4. Show Underwater GUI
+    -- 4. Show Underwater GUI - Wait for assets to be ready
     local uwGui
-    uwGui = createUnderwaterGui(function()
-        self:StartExitSequence(plotModel, loadingSg, uwGui)
-    end)
+    if Assets.IsReady() then
+        uwGui = createUnderwaterGui(function()
+            self:StartExitSequence(plotModel, loadingSg, uwGui)
+        end)
+    else
+        -- Wait for assets to be ready before creating GUI
+        Assets.OnReady:Once(function()
+            uwGui = createUnderwaterGui(function()
+                self:StartExitSequence(plotModel, loadingSg, uwGui)
+            end)
+        end)
+        
+        -- Wait a bit for the GUI to be created
+        local maxWait = 5
+        local waitTime = 0
+        while not uwGui and waitTime < maxWait do
+            task.wait(0.1)
+            waitTime += 0.1
+        end
+        
+        if not uwGui then
+            warn("[PlotController] Failed to create underwater GUI after waiting for assets")
+            return
+        end
+    end
     
     -- 5. Fade out loading
     TweenService:Create(loadingFrame, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()

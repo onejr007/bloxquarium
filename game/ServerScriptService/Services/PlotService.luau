@@ -60,33 +60,18 @@ function PlotService:Init(DataService: any, RemoteService: any, UnderwaterServic
         self:AssignPlotToPlayer(player)
         
         player.CharacterAdded:Connect(function(character)
-            local root = character:WaitForChild("HumanoidRootPart", 10)
-            if not root then return end
-            
-            task.wait(1.5)
+            task.wait(1) -- Beri waktu agar semua siap
             local plot = self.playerPlots[player]
-            if plot then
+            if plot and character:FindFirstChild("HumanoidRootPart") then
                 self:TeleportCharacterToPlot(character, plot)
             end
-            
-            task.spawn(function()
-                for _ = 1, 10 do
-                    task.wait(1)
-                    local currentPlot = self.playerPlots[player]
-                    if currentPlot and character.Parent and character:FindFirstChild("HumanoidRootPart") then
-                        self:TeleportCharacterToPlot(character, currentPlot)
-                        break
-                    end
-                end
-            end)
         end)
         
         if player.Character then
             task.spawn(function()
-                local root = player.Character:WaitForChild("HumanoidRootPart", 5)
+                task.wait(1) -- Beri waktu agar semua siap
                 local plot = self.playerPlots[player]
-                if root and plot then 
-                    task.wait(1)
+                if plot and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then 
                     self:TeleportCharacterToPlot(player.Character, plot) 
                 end
             end)

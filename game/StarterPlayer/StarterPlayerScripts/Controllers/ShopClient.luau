@@ -13,6 +13,8 @@ local PLAYER_GUI = PLAYER:WaitForChild("PlayerGui")
 local SHARED = ReplicatedStorage:WaitForChild("Shared")
 local REMOTE_CLIENT = require(SHARED:WaitForChild("RemoteClient"))
 local ASSET_MANAGER = require(SHARED:WaitForChild("AssetManagerV3"))
+-- [NEW] Import ViewportManager
+local VIEWPORT_MANAGER = require(SHARED:WaitForChild("ViewportManager"))
 
 local THEME = {
 	BG = Color3.fromRGB(12, 14, 20),
@@ -37,7 +39,7 @@ local timerConn: RBXScriptConnection? = nil
 local distanceCheckConn: RBXScriptConnection? = nil
 
 -- [HELPERS]
-local function log(msg: string) print(`[SHOP_AAA] {os.date("%X")} | {msg}`) end
+local function log(msg: string) print(`[SHOP_CLIENT] {os.date("%X")} | {msg}`) end
 
 local function applyStyle(inst: GuiObject, radius: number)
 	local c = Instance.new("UICorner")
@@ -105,78 +107,39 @@ local function createItemCard(id: string, itemData: any, stock: number, parent: 
 	_title.BackgroundTransparency, _title.Parent = 1, container
 	_title.TextTruncate = Enum.TextTruncate.AtEnd
 
-	-- [VIEWPORT]
-	local viewFrame = Instance.new("ViewportFrame")
-	viewFrame.Name = "Viewport"
-	viewFrame.Size = UDim2.new(1, 0, 0.45, 0)
-	viewFrame.Position = UDim2.fromScale(0, 0.15)
-	viewFrame.BackgroundTransparency = 1
-	viewFrame.Ambient = Color3.fromRGB(180, 180, 180)
-	viewFrame.LightColor = Color3.fromRGB(255, 255, 255)
-	viewFrame.LightDirection = Vector3.new(-1, -1, -1)
-	viewFrame.Parent = container
+	-- [REPLACEMENT] Menggunakan ViewportManager untuk membuat viewport
+    local viewContainer = Instance.new("Frame")
+    viewContainer.Name = "ViewportContainer"
+    viewContainer.Size = UDim2.new(1, 0, 0.45, 0)
+    viewContainer.Position = UDim2.fromScale(0, 0.15)
+    viewContainer.BackgroundTransparency = 1
+    viewContainer.Parent = container
 
-	local worldModel = Instance.new("WorldModel")
-	worldModel.Parent = viewFrame
+    local modelName = itemData.mInfoName or itemData.mDropName
+    if modelName then
+        local _viewport = VIEWPORT_MANAGER:CreateModelViewport(viewContainer, modelName, 0, 1.2)
+        local model = VIEWPORT_MANAGER:GetModel(modelName)
 
-	local cam = Instance.new("Camera")
-	cam.FieldOfView = 35
-	viewFrame.CurrentCamera = cam
-	cam.Parent = viewFrame
-
-	task.spawn(function()
-		local mName = itemData.mInfoName
-		if not mName then return end
-
-		local assets = ReplicatedStorage:WaitForChild("assets", 5)
-		if not assets then return end
-		local models = assets:WaitForChild("models", 5)
-		if not models then return end
-
-		local targetModel = models:FindFirstChild(mName, true)
-		if targetModel then
-			local clone = targetModel:Clone()
-			
-			if clone:IsA("Model") then
-				for _, p in ipairs(clone:GetDescendants()) do
-					if p:IsA("BasePart") then p.CanCollide = false; p.Anchored = true end
-				end
-			elseif clone:IsA("BasePart") then
-				clone.CanCollide = false
-				clone.Anchored = true
-			end
-			
-			clone.Parent = worldModel
-			
-			local cf: CFrame, size: Vector3
-			if clone:IsA("Model") then
-				cf, size = (clone :: Model):GetBoundingBox()
-				clone:PivotTo(CFrame.new(-cf.Position))
-			elseif clone:IsA("BasePart") then
-				size = (clone :: BasePart).Size;
-				clone.CFrame = CFrame.new(-(clone.Position))
-			end
-
-			local maxDim = math.max(size.X, size.Y, size.Z)
-			local dist = (maxDim / math.tan(math.rad(cam.FieldOfView / 2))) * 0.9
-			cam.CFrame = CFrame.new(Vector3.new(dist, dist * 0.5, dist), Vector3.new(0, 0, 0))
-
-			local rotSpeed = 0.5
-			local conn: RBXScriptConnection?
-			conn = RunService.RenderStepped:Connect(function(_dt)
-				if not viewFrame or not viewFrame.Parent or not clone.Parent then
-					if conn then conn:Disconnect() end
-					return
-				end
-				local rot = CFrame.Angles(0, math.rad(rotSpeed), 0)
-				if clone:IsA("Model") then
-					clone:PivotTo(clone:GetPivot() * rot)
-				elseif clone:IsA("BasePart") then
-					clone.CFrame = clone.CFrame * rot
-				end
-			end)
-		end
-	end)
+        if model then
+            -- Terus putar model untuk efek dinamis
+            local rotSpeed = 0.5
+            local conn: RBXScriptConnection?
+            conn = RunService.RenderStepped:Connect(function(_dt)
+                if not model or not model.Parent then
+                    if conn then conn:Disconnect() end
+                    return
+                end
+                local rot = CFrame.Angles(0, math.rad(rotSpeed), 0)
+                if model:IsA("Model") then
+                    model:PivotTo(model:GetPivot() * rot)
+                elseif model:IsA("BasePart") then
+                    model.CFrame = model.CFrame * rot
+                end
+            end)
+        end
+    else
+        log(string.format("Item '%s' tidak memiliki mInfoName atau mDropName. Viewport akan kosong.", id))
+    end
 
 	local _priceLbl = Instance.new("TextLabel")
 	_priceLbl.Size = UDim2.new(1, 0, 0, 18)

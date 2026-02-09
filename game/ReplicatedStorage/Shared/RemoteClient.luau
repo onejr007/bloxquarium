@@ -1,8 +1,11 @@
 --[[
-    RemoteClient.luau (v1.3 - Server Guard Fix)
+    RemoteClient.luau (v1.4 - Definitive Return Value Unpacking)
 
-    - FIXED: A critical crash where the script would attempt to run client-only code on the server.
-    - The initialization call is now wrapped in a RunService:IsClient() check.
+    - This is the second half of the definitive fix for invoke/return value mismatches.
+    - The server (`RemoteServer` v1.5+) now guarantees to send a single table containing all return values.
+    - This version updates `InvokeServer` to unpack that table before resolving the Promise.
+    - `resolve(unpack(result))` effectively reconstructs the original, multi-value return from the server handler on the client side.
+    - This makes the entire network protocol robust and transparent to the rest of the codebase.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,7 +69,15 @@ function RemoteClient:InvokeServer(eventName, ...)
         end)
 
         if success then
-            resolve(result)
+            -- ## THE FINAL, DEFINITIVE FIX (CLIENT-SIDE) ##
+            -- The server now guarantees `result` is a table containing the actual return values.
+            -- We unpack this table to resolve the promise with the original, multi-value return.
+            if type(result) == "table" then
+                resolve(unpack(result))
+            else
+                -- Fallback for unexpected or legacy results
+                resolve(result)
+            end
         else
             reject(result)
         end

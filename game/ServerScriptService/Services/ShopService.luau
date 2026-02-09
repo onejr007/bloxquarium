@@ -10,6 +10,7 @@ ShopService.Name = "ShopService"
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 
 local Promise = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Promise"))
 
@@ -17,7 +18,7 @@ local RemoteService: any -- Akan di-inject dari ServiceLoader
 local DataService: any     -- Akan di-inject dari ServiceLoader
 
 local SHOP_COOLDOWN = 600 -- 10 menit dalam detik
-local currentShopDataCache: any = nil 
+local currentShopDataCache: any = nil
 
 function ShopService:Init(remoteService: any, dataService: any)
     print("⚓ [ShopService] Memulai layanan toko (v11.0 - Database Driven)...")
@@ -91,74 +92,88 @@ function ShopService:AddItemData(category: string, itemId: string, data: any)
 end
 
 function ShopService:GetResolvedShopPayload(): any
-    return Promise.all({
-        self:GetShopData(),
-        self:GetItemsData()
-    }):andThen(function(results: any)
-        local shopData = results[1]
-        local itemsData = results[2]
-        
-        print("🔍 [ShopService] Memulai resolusi data toko...")
-        
-        if not shopData then 
-            warn("❌ [ShopService] GetResolvedShopPayload: shopData is NIL from DataService.")
-            return nil
-        end
-        
-        if not itemsData then 
-            warn("❌ [ShopService] GetResolvedShopPayload: itemsData is NIL from DataService.")
-            return nil
-        end
+    return Promise.new(function(resolve, reject)
+        local shopData, itemsData = nil, nil
 
-        local resolvedItems = {}
-        local itemMap = shopData.item or {}
-        
-        print(string.format("   -> [Info] Ditemukan %d item di stok toko.", (function() local c=0 for _ in pairs(itemMap) do c+=1 end return c end)()))
-        
-        for id, stock in pairs(itemMap) do
-            if typeof(id) ~= "string" then continue end
-            if id == "start" or id == "end" then continue end
+        local function checkAndResolve()
+            if shopData and itemsData then
+                print("🔍 [ShopService] Memulai resolusi data toko...")
 
-            local details = nil
-            local foundCategory = nil
-            
-            for categoryName, categoryItems in pairs(itemsData) do
-                if typeof(categoryItems) == "table" and categoryItems[id] then
-                    details = categoryItems[id]
-                    foundCategory = categoryName
-                    break
+                if not shopData then
+                    warn("❌ [ShopService] GetResolvedShopPayload: shopData is NIL from DataService.")
+                    reject("shopData is nil")
+                    return
                 end
-            end
-            
-            if details and foundCategory then
-                print(string.format("   -> [Resolved] ID: %s | Kategori: %s | Model: %s", id, foundCategory, tostring(details.mInfoName)))
-                table.insert(resolvedItems, {
-                    id = id,
-                    stock = stock,
-                    category = foundCategory,
-                    details = {
-                        name = details.name or id,
-                        mInfoName = details.mInfoName or "ModelMissing",
-                        price = details.price or 0,
-                        rarity = details.rarity or "common",
-                        description = details.desc or ""
-                    }
-                })
-            else
-                warn(string.format("⚠️ [ShopService] Item ID '%s' ditemukan di stok toko tapi TIDAK ada di database items!", id))
+
+                if not itemsData then
+                    warn("❌ [ShopService] GetResolvedShopPayload: itemsData is NIL from DataService.")
+                    reject("itemsData is nil")
+                    return
+                end
+
+                local resolvedItems = {}
+                local itemMap = shopData.item or {}
+
+                print(string.format("   -> [Info] Ditemukan %d item di stok toko.", (function() local c = 0 for _ in pairs(itemMap) do c += 1 end return c end)()))
+
+                for id, stock in pairs(itemMap) do
+                    if typeof(id) ~= "string" then continue end
+                    if id == "start" or id == "end" then continue end
+
+                    local details = nil
+                    local foundCategory = nil
+
+                    for categoryName, categoryItems in pairs(itemsData) do
+                        if typeof(categoryItems) == "table" and categoryItems[id] then
+                            details = categoryItems[id]
+                            foundCategory = categoryName
+                            break
+                        end
+                    end
+
+                    if details and foundCategory then
+                        local modelName = details.mInfoName or details.mDropName or "ModelMissing"
+                        print(string.format("   -> [Resolved] ID: %s | Kategori: %s | Model: %s", id, foundCategory, tostring(modelName)))
+                        print(string.format("   -> [DEBUG] Data lengkap untuk ID %s: %s", id, HttpService:JSONEncode(details)))
+
+                        table.insert(resolvedItems, {
+                            id = id,
+                            stock = stock,
+                            category = foundCategory,
+                            details = {
+                                name = details.name or id,
+                                mInfoName = modelName,
+                                price = details.price or 0,
+                                rarity = details.rarity or "common",
+                                description = details.desc or ""
+                            }
+                        })
+                    else
+                        warn(string.format("⚠️ [ShopService] Item ID '%s' ditemukan di stok toko tapi TIDAK ada di database items!", id))
+                    end
+                end
+
+                print(string.format("✅ [ShopService] Berhasil meresolusi %d item.", #resolvedItems))
+
+                local finalPayload = {
+                    endTime = shopData["end"],
+                    startTime = shopData.start,
+                    items = resolvedItems
+                }
+                print("   -> [DEBUG] Payload final yang akan dikirim: " .. HttpService:JSONEncode(finalPayload))
+                resolve(finalPayload)
             end
         end
 
-        print(string.format("✅ [ShopService] Berhasil meresolusi %d item.", #resolvedItems))
+        self:GetShopData():andThen(function(data)
+            shopData = data
+            checkAndResolve()
+        end)
 
-        return {
-            endTime = shopData["end"],
-            startTime = shopData.start,
-            items = resolvedItems
-        }
-    end):catch(function(err)
-        warn("❌ [ShopService] Error saat meresolusi payload toko: " .. tostring(err))
-        return nil
+        self:GetItemsData():andThen(function(data)
+            itemsData = data
+            checkAndResolve()
+        end)
     end)
 end
 
@@ -211,7 +226,6 @@ function ShopService:StartBoatMovement()
                 local angleChange = math.rad(DEGREES_PER_SECOND) * deltaTime
                 angle = (angle + angleChange) % (math.pi * 2)
             else
-                -- Check if still anyone in shop, if not, resume
                 local count = 0
                 for _ in pairs(self.playersInShop) do count += 1 end
                 if count == 0 then
@@ -250,7 +264,9 @@ function ShopService:StartBoatMovement()
         
         self:GetResolvedShopPayload():andThen(function(payload: any)
             if payload then
+                print(string.format("--> [DEBUG] Hendak mengirim OpenShopGUI ke %s...", player.Name))
                 RemoteService:SendToClient(player, "OpenShopGUI", payload)
+                print(string.format("<-- [DEBUG] Selesai mengirim OpenShopGUI ke %s.", player.Name))
             else
                 warn("WAR: [ShopService] Gagal mengirim data toko ke klien karena data tidak lengkap.")
             end
@@ -286,12 +302,12 @@ function ShopService:StartShopCycle()
             if needsReset then
                 print("🛍️ [ShopService] Toko kedaluwarsa atau kosong. Mereset...")
                 self:ResetShop()
-                task.wait(30) -- Beri waktu Firebase untuk sinkronisasi sebelum siklus berikutnya
+                task.wait(30) 
                 cycle()
             else
                 currentShopDataCache = shopData
                 print(string.format("🛍️ [ShopService] Toko masih valid. Reset berikutnya dalam %d detik.", remainingTime))
-                task.wait(math.min(remainingTime, 300)) -- Cek setiap 5 menit atau saat expired
+                task.wait(math.min(remainingTime, 300))
                 cycle()
             end
         end):catch(function(err: any)
@@ -323,7 +339,6 @@ function ShopService:ResetShop()
             table.insert(chanceList, {id = id, cfg = cfg})
         end
 
-        -- Ensure at least 2 items if possible
         local attempts = 0
         while next(newShopItems) == nil or (#(function() local t={} for k in pairs(newShopItems) do table.insert(t,k) end return t end)()) < 2 do
             for _, entry in ipairs(chanceList) do
@@ -335,7 +350,7 @@ function ShopService:ResetShop()
                 end
             end
             attempts += 1
-            if attempts > 5 then break end -- Avoid infinite loop
+            if attempts > 5 then break end 
         end
 
         local now = os.time()
@@ -358,7 +373,8 @@ function ShopService:ResetShop()
             currentShopDataCache = newShopData
             
             for _, player in ipairs(Players:GetPlayers()) do
-                RemoteService:SendToClient(player, "OpenShopGUI", payload)
+                -- This is for broadcasting to everyone on reset, not for individual triggers
+                -- RemoteService:SendToClient(player, "OpenShopGUI", payload)
             end
         end):catch(function(err: any)
             warn("CRITICAL: [ShopService] Gagal menulis atau mengirim data toko baru! " .. tostring(err))

@@ -23,6 +23,7 @@ local ClientState = require(Shared:WaitForChild("ClientState"))
 local ShopClient = require(Controllers:WaitForChild("ShopClient"))
 local PlotController = require(Controllers:WaitForChild("PlotController"))
 
+
 print("🚀 [ClientManager v1.5] Implementing client-server handshake and controllers.")
 
 -- UI CREATION, etc. ... (code from v1.4 is unchanged)

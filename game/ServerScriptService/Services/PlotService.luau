@@ -174,6 +174,9 @@ function PlotService:AssignPlotToPlayer(player: Player)
         self.playerPlots[player] = assignedPlot
         self.plotOwners[assignedPlot] = player
         
+        -- Apply saved model level immediately
+        self:UpdateAquariumModel(player, assignedPlot)
+        
         self:RefreshPrompt(assignedPlot, player)
         print(string.format("   -> [AssignPlot] Plot '%s' ditugaskan ke %s.", assignedPlot.Name, player.Name))
     end

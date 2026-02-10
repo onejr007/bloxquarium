@@ -523,5 +523,34 @@ function Boot()
     Log("Boot sequence complete.")
 end
 
-Remote:On("AdminStatusResponse", function(isAdmin) if isAdmin then if Assets.IsReady() then Boot() else Assets.OnReady:Once(Boot) end end end)
-Remote:FireServer("RequestAdminCheck")
+-- Check admin status and boot if permitted
+local function RequestAdminCheck()
+    print("👑 [AdminGui] Requesting admin check for " .. Player.Name .. " (" .. tostring(Player.UserId) .. ")")
+    Remote:InvokeServer("IsClientAdmin"):andThen(function(isAdmin)
+        print("👑 [AdminGui] IsClientAdmin result:", isAdmin)
+        
+        -- If result is nil, it means the server handler isn't registered yet (race condition)
+        if isAdmin == nil then
+            warn("⚠️ [AdminGui] Admin check handler not ready. Retrying in 2s...")
+            task.delay(2, RequestAdminCheck)
+            return
+        end
+
+        if isAdmin == true then
+            if Assets.IsReady() then 
+                print("👑 [AdminGui] Assets ready, booting...")
+                Boot() 
+            else 
+                print("👑 [AdminGui] Waiting for Assets to be ready...")
+                Assets.OnReady:Once(Boot) 
+            end
+        else
+            print("👑 [AdminGui] Player is NOT an admin. GUI will not boot.")
+        end
+    end):catch(function(err)
+        warn("👑 [AdminGui] Failed to check admin status, retrying: ", err)
+        task.delay(5, RequestAdminCheck)
+    end)
+end
+
+RequestAdminCheck()

@@ -16,6 +16,8 @@ local AdminService = {}
 
 local adminIdCache = {} -- {[userIdString] = true}
 local ADMIN_PATH = "/admins"
+local isReady = false
+local readyEvent = Instance.new("BindableEvent")
 
 --///////////////////////////////////////////////////////////////////////////
 --// INTERNAL FUNCTIONS
@@ -38,10 +40,17 @@ end
 
 function AdminService.isAdmin(player)
     if not player then return false end
-    return adminIdCache[tostring(player.UserId)] == true
+    if not isReady then
+        print("👑 [AdminService] isAdmin check yielding for ready status...")
+        readyEvent.Event:Wait()
+    end
+    local isAdm = adminIdCache[tostring(player.UserId)] == true
+    print(string.format("👑 [AdminService] Checking admin for %s (%s): %s", player.Name, tostring(player.UserId), tostring(isAdm)))
+    return isAdm
 end
 
 function AdminService.GetAdminList(player)
+    if not isReady then readyEvent.Event:Wait() end
     if not AdminService.isAdmin(player) then return {} end
 
     local adminList = {}
@@ -57,6 +66,7 @@ function AdminService.GetAdminList(player)
 end
 
 function AdminService.AddAdmin(player, targetIdentifier)
+    if not isReady then readyEvent.Event:Wait() end
     if not AdminService.isAdmin(player) then return false, "Unauthorized" end
 
     local targetUserId = tonumber(targetIdentifier)
@@ -82,6 +92,7 @@ function AdminService.AddAdmin(player, targetIdentifier)
 end
 
 function AdminService.RemoveAdmin(player, targetUserId)
+    if not isReady then readyEvent.Event:Wait() end
     if not AdminService.isAdmin(player) then return false, "Unauthorized" end
     
     targetUserId = tonumber(targetUserId)
@@ -97,6 +108,7 @@ function AdminService.RemoveAdmin(player, targetUserId)
 end
 
 function AdminService.GetShopAdminData(player)
+    if not isReady then readyEvent.Event:Wait() end
     if not AdminService.isAdmin(player) then return nil, "Unauthorized" end
     
     if InjectedShopService then
@@ -125,24 +137,37 @@ function AdminService:Init(DataService, ShopService)
         return
     end
     
+    local function onComplete()
+        isReady = true
+        readyEvent:Fire()
+    end
+
     -- Sync with Firebase on startup
     InjectedDataService:Get(ADMIN_PATH):andThen(function(adminData)
+        print("👑 [AdminService] Raw admin data from DB:", adminData)
         if adminData == nil or (typeof(adminData) == "table" and next(adminData) == nil) then 
-            local initialAdmins = {90101532} -- Default ID
-            InjectedDataService:Set(ADMIN_PATH, initialAdmins):andThen(function()
-                adminIdCache = {[tostring(initialAdmins[1])] = true}
-            end)
+            warn("👑 [AdminService] PERINGATAN: Tidak ada data admin yang ditemukan di database.")
+            adminIdCache = {}
+            onComplete()
         elseif typeof(adminData) == "table" then
             local newCache = {}
+            local count = 0
             for _, adminId in ipairs(adminData) do
                 if typeof(adminId) == "number" then
                     newCache[tostring(adminId)] = true
+                    count = count + 1
                 end
             end
             adminIdCache = newCache
+            print(string.format("👑 [AdminService] Berhasil memuat %d admin ke cache.", count))
+            onComplete()
+        else
+            warn("👑 [AdminService] Data admin di database tidak valid (bukan tabel).")
+            onComplete()
         end
     end):catch(function(err)
         warn("👑 [AdminService] Gagal mengambil data Firebase: " .. tostring(err))
+        onComplete()
     end)
     
     print("👑 [AdminService] Berhasil menginisialisasi Manajemen Admin.")

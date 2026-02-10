@@ -16,14 +16,24 @@ local RemoteClient = {}
 
 local remoteEvent
 local remoteFunction
+local isInitialized = false
+local initializedEvent = Instance.new("BindableEvent")
 
 local serverEventHandlers = {}
 
 local function initializeFromServerListener()
     print("🔌 [RemoteClient] Waiting for server communication channels...")
-    remoteEvent = ReplicatedStorage:WaitForChild("ClientStateChannel")
-    remoteFunction = ReplicatedStorage:WaitForChild("ClientInvokeChannel")
+    remoteEvent = ReplicatedStorage:WaitForChild("ClientStateChannel", 10)
+    remoteFunction = ReplicatedStorage:WaitForChild("ClientInvokeChannel", 10)
+    
+    if not remoteEvent or not remoteFunction then
+        warn("❌ [RemoteClient] CRITICAL: Server communication channels not found within timeout!")
+        return
+    end
+    
     print("✅ [RemoteClient] Server channels found. Connection established.")
+    isInitialized = true
+    initializedEvent:Fire()
 
     remoteEvent.OnClientEvent:Connect(function(eventData)
         if type(eventData) ~= "table" then return end
@@ -41,6 +51,23 @@ local function initializeFromServerListener()
                 local args = eventData.args or {}
                 task.spawn(handler, unpack(args))
             end
+        end
+    end)
+end
+
+function RemoteClient:WaitForConnection()
+    if isInitialized then return Promise.resolve(true) end
+    return Promise.new(function(resolve)
+        local connection
+        connection = initializedEvent.Event:Connect(function()
+            connection:Disconnect()
+            resolve(true)
+        end)
+        
+        -- Fallback if already initialized by the time we connect
+        if isInitialized then
+            connection:Disconnect()
+            resolve(true)
         end
     end)
 end

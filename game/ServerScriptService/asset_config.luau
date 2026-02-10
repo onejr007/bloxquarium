@@ -37,6 +37,7 @@ return {
         Coin1_ico = "rbxassetid://92342444032080",
         Fish_ico = "rbxassetid://103155001392232",
         Egg_ico = "rbxassetid://70688476970062",
+        Food_ico = "rbxassetid://102283947004834",
         
     },
 

@@ -7,45 +7,50 @@
       "id_egg_1770632986": {
         "chance": 100,
         "stockMax": 9999,
-        "stockMin": 9999
+        "stockMin": 999
       },
       "id_egg_1770633097": {
         "chance": 100,
         "stockMax": 999,
-        "stockMin": 999
+        "stockMin": 99
       },
       "id_egg_1770633225": {
         "chance": 100,
         "stockMax": 99,
-        "stockMin": 99
+        "stockMin": 1
       },
       "id_food_1770633722": {
         "chance": 100,
         "stockMax": 999999,
-        "stockMin": 999999
+        "stockMin": 99999
       },
       "id_food_1770633895": {
         "chance": 100,
         "stockMax": 999999,
-        "stockMin": 999999
+        "stockMin": 99999
       },
       "id_food_1770633942": {
         "chance": 100,
         "stockMax": 999999,
-        "stockMin": 999999
+        "stockMin": 99999
+      }
+    },
+    "global": {
+      "admins": {
+        "9002653829": true
       }
     },
     "shop": {
-      "end": "2026-02-09T15:40:04Z",
+      "end": "2026-02-10T17:52:28Z",
       "item": {
-        "id_egg_1770632986": 9999,
-        "id_egg_1770633097": 999,
-        "id_egg_1770633225": 99,
-        "id_food_1770633722": 999999,
-        "id_food_1770633895": 999999,
-        "id_food_1770633942": 999999
+        "id_egg_1770632986": 8001,
+        "id_egg_1770633097": 623,
+        "id_egg_1770633225": 96,
+        "id_food_1770633722": 672397,
+        "id_food_1770633895": 364498,
+        "id_food_1770633942": 868361
       },
-      "start": "2026-02-09T15:30:04Z"
+      "start": "2026-02-10T17:42:28Z"
     }
   },
   "items": {
@@ -89,7 +94,31 @@
         "name": "Guppy",
         "price": 100,
         "rarity": "common",
-        "typeSwim": "normal"
+        "typeSwim": "normal",
+        "Baby": {
+          "speed": 2,
+          "expGrowth": 0,
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 0,
+          "mScale": 0.4
+        },
+        "Adult": {
+          "speed": 1.5,
+          "expGrowth": 100,
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 100,
+          "mScale": 0.4
+        },
+        "Senior": { 
+          "speed": 1,
+          "expGrowth": 1000,
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 250,
+          "mScale": 0.4
+        }
       }
     },
     "Food": {
@@ -137,9 +166,19 @@
   "players": {
     "9002653829": {
       "AquariumLevel": 3,
-      "Coins": 111,
+      "Coins": 0,
       "Gems": 0,
-      "LastSave": 1770651531,
+      "Inventory": {
+        "Egg": {
+          "id_egg_1770632986": 6,
+          "id_egg_1770633097": 9
+        },
+        "Food": {
+          "id_food_1770633895": 15,
+          "id_food_1770633942": 3
+        }
+      },
+      "LastSave": 1770745384,
       "Level": 5,
       "XP": 0
     }

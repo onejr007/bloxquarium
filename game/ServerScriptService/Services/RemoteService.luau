@@ -59,6 +59,19 @@ function RemoteService:Init(DataService)
 
     Log("Initializing secure remote handler v3.0...")
 
+    -- ## FIX: Connect DataService updates to ClientState ##
+    InjectedDataService.StateUpdated:Connect(function(player)
+        local state = InjectedDataService:Get(player)
+        if state then
+            -- We bypass the standard FireClient packaging to send the raw state table
+            -- which ClientState.luau expects on the 'ClientStateChannel'.
+            local remoteEvent = game:GetService("ReplicatedStorage"):FindFirstChild("ClientStateChannel")
+            if remoteEvent and remoteEvent:IsA("RemoteEvent") then
+                remoteEvent:FireClient(player, state)
+            end
+        end
+    end)
+
     -- ## DEFINITIVE FIX: LAZY-LOAD CONFIGS ##
     self:RegisterInvoke("GetAssetRegistry", function(player)
         Log(string.format("Asset & Loading configs requested by: %s.", player.Name))
@@ -82,6 +95,12 @@ function RemoteService:Init(DataService)
             LoadingConfig = cachedLoadingConfig,
             IsServerReady = isServerReady
         }
+    end)
+
+    self:RegisterInvoke("GetItemRegistry", function(player)
+        if not InjectedDataService then return nil end
+        Log(string.format("Item registry requested by: %s.", player.Name))
+        return InjectedDataService:Get("/items")
     end)
 
     self:RegisterInvoke("RequestAllPlayerData", function(player)

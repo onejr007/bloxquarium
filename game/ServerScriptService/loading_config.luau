@@ -25,6 +25,7 @@ local Config = {
                 "Coin1_ico",
                 "Fish_ico",
                 "Egg_ico",
+                "Food_ico",
                 "Shop_BACKGROUND",
             }
         },

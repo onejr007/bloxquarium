@@ -178,9 +178,54 @@ function ShopClient:Init()
 	local titleLabel = Instance.new("TextLabel", header)
 	titleLabel.Name = "TitleLabel"
 	titleLabel.Text = "SUPPLY TERMINAL"
-	titleLabel.Size, titleLabel.Position = UDim2.new(1, -100, 1, 0), UDim2.fromOffset(25, 0)
+	titleLabel.Size, titleLabel.Position = UDim2.new(0.6, -25, 1, 0), UDim2.fromOffset(25, 0)
 	titleLabel.TextColor3, titleLabel.Font, titleLabel.TextSize = THEME.WHITE, Enum.Font.GothamBlack, 24
 	titleLabel.TextXAlignment, titleLabel.BackgroundTransparency = Enum.TextXAlignment.Left, 1
+
+	local timerLabel = Instance.new("TextLabel", header)
+	timerLabel.Name = "TimerLabel"
+	timerLabel.Size, timerLabel.Position = UDim2.new(0.4, -60, 1, 0), UDim2.new(1, -60, 0, 0)
+	timerLabel.AnchorPoint = Vector2.new(1, 0)
+	timerLabel.TextColor3, timerLabel.Font, timerLabel.TextSize = THEME.ACCENT, Enum.Font.GothamBold, 14
+	timerLabel.TextXAlignment, timerLabel.BackgroundTransparency = Enum.TextXAlignment.Right, 1
+	timerLabel.Text = "RESET: 00:00"
+
+	local timerConn: RBXScriptConnection?
+	local function startTimer(endTimeISO: string)
+		if timerConn then timerConn:Disconnect() end
+		
+		-- Parse ISO 8601 string manually to avoid timezone issues (assuming UTC)
+		local y, m, d, h, min, s = endTimeISO:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+		if not y then return end
+		
+		-- Use os.time with UTC table conversion if possible, or just calculate diff
+		-- Robust way: calculate destination timestamp in UTC
+		local destTime = os.time({
+			year = tonumber(y) :: number,
+			month = tonumber(m) :: number,
+			day = tonumber(d) :: number,
+			hour = tonumber(h) :: number,
+			min = tonumber(min) :: number,
+			sec = tonumber(s) :: number
+		})
+
+		timerConn = RunService.Heartbeat:Connect(function()
+			-- Get current time in UTC to match the parsed ISO time
+			local now = os.time(os.date("!*t") :: any)
+			local diff = destTime - now
+			if diff <= 0 then
+				timerLabel.Text = "RESETTING..."
+				timerConn:Disconnect()
+				timerConn = nil
+				return
+			end
+			
+			local hours = math.floor(diff / 3600)
+			local mins = math.floor((diff % 3600) / 60)
+			local secs = diff % 60
+			timerLabel.Text = string.format("RESET IN: %02d:%02d:%02d", hours, mins, secs)
+		end)
+	end
 
 	local close = Instance.new("TextButton", header)
 	close.Name = "CloseBtn"
@@ -198,14 +243,34 @@ function ShopClient:Init()
 
 	REMOTE_CLIENT:On("OpenShopGUI", function(payload)
 		if not payload then return end
+		if payload.endTime then
+			startTimer(payload.endTime)
+		end
 		itemUIs = {} -- Reset
 		for _, v in ipairs(scroll:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
+		
+		-- Handle case where payload.items is nil or empty
+		local items = payload.items or {}
+		if #items == 0 then
+			-- Create a message indicating no items are available
+			local noItemsFrame = Instance.new("Frame", scroll)
+			noItemsFrame.Size, noItemsFrame.BackgroundTransparency = UDim2.new(1, 0, 0, 60), 1
+			noItemsFrame.LayoutOrder = 999
+			
+			local noItemsLabel = Instance.new("TextLabel", noItemsFrame)
+			noItemsLabel.Size, noItemsLabel.Position = UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0)
+			noItemsLabel.Text = "TIDAK ADA ITEM YANG TERSEDIA\nSilakan coba lagi nanti."
+			noItemsLabel.TextColor3, noItemsLabel.Font, noItemsLabel.TextSize = THEME.DANGER, Enum.Font.GothamBold, 16
+			noItemsLabel.TextYAlignment, noItemsLabel.BackgroundTransparency = Enum.TextYAlignment.Center, 1
+			noItemsLabel.TextWrapped = true
+			return
+		end
 		
 		local ORDER = {"EGG", "FISH", "FOOD", "PET", "OTHER"}
 		local groups = {}
 		for _, k in ipairs(ORDER) do groups[k] = {} end
 
-		for _, item in ipairs(payload.items) do
+		for _, item in ipairs(items) do
 			local c = (item.id:match("^id_(%a+)_") or "OTHER"):upper()
 			if groups[c] then table.insert(groups[c], item) else table.insert(groups.OTHER, item) end
 		end
@@ -255,6 +320,9 @@ function ShopClient:Init()
 				end
 			end
 		end
+		
+		-- Enable the shop GUI when data is received
+		-- This ensures the shop opens when the player clicks the proximity prompt
 		sg.Enabled = true
 	end)
 

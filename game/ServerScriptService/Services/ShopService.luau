@@ -184,30 +184,16 @@ function ShopService:AddItemData(category: string, itemId: string, data: any)
     return DataService:Set("/items/" .. category .. "/" .. itemId, data)
 end
 
-function ShopService:GetResolvedShopPayload(): any
+function ShopService:GetResolvedShopPayload(providedShopData: any?): any
     return Promise.new(function(resolve, reject)
-        local shopData, itemsData = nil, nil
+        local shopData, itemsData = providedShopData, nil
 
         local function checkAndResolve()
             if shopData and itemsData then
                 print("🔍 [ShopService] Memulai resolusi data toko...")
 
-                if not shopData then
-                    warn("❌ [ShopService] GetResolvedShopPayload: shopData is NIL from DataService.")
-                    reject("shopData is nil")
-                    return
-                end
-
-                if not itemsData then
-                    warn("❌ [ShopService] GetResolvedShopPayload: itemsData is NIL from DataService.")
-                    reject("itemsData is nil")
-                    return
-                end
-
                 local resolvedItems = {}
                 local itemMap = shopData.item or {}
-
-                print(string.format("   -> [Info] Ditemukan %d item di stok toko.", (function() local c = 0 for _ in pairs(itemMap) do c += 1 end return c end)()))
 
                 for id, stock in pairs(itemMap) do
                     if typeof(id) ~= "string" then continue end
@@ -226,9 +212,6 @@ function ShopService:GetResolvedShopPayload(): any
 
                     if details and foundCategory then
                         local modelName = details.mInfoName or details.mDropName or "ModelMissing"
-                        print(string.format("   -> [Resolved] ID: %s | Kategori: %s | Model: %s", id, foundCategory, tostring(modelName)))
-                        print(string.format("   -> [DEBUG] Data lengkap untuk ID %s: %s", id, HttpService:JSONEncode(details)))
-
                         table.insert(resolvedItems, {
                             id = id,
                             stock = stock,
@@ -241,32 +224,29 @@ function ShopService:GetResolvedShopPayload(): any
                                 description = details.desc or ""
                             }
                         })
-                    else
-                        warn(string.format("⚠️ [ShopService] Item ID '%s' ditemukan di stok toko tapi TIDAK ada di database items!", id))
                     end
                 end
-
-                print(string.format("✅ [ShopService] Berhasil meresolusi %d item.", #resolvedItems))
 
                 local finalPayload = {
                     endTime = shopData["end"],
                     startTime = shopData.start,
                     items = resolvedItems
                 }
-                print("   -> [DEBUG] Payload final yang akan dikirim: " .. HttpService:JSONEncode(finalPayload))
                 resolve(finalPayload)
             end
         end
 
-        self:GetShopData():andThen(function(data)
-            shopData = data
-            checkAndResolve()
-        end)
+        if not shopData then
+            self:GetShopData():andThen(function(data)
+                shopData = data
+                checkAndResolve()
+            end):catch(reject)
+        end
 
         self:GetItemsData():andThen(function(data)
             itemsData = data
             checkAndResolve()
-        end)
+        end):catch(reject)
     end)
 end
 
@@ -459,15 +439,15 @@ function ShopService:ResetShop()
         Promise.all({
             DataService:Set("/game/shop", newShopData)
         }):andThen(function()
-            return self:GetResolvedShopPayload()
+            return self:GetResolvedShopPayload(newShopData)
         end):andThen(function(payload: any)
             if not payload then error("Gagal generate payload") end
             print("✅ [ShopService] Toko berhasil diperbarui di Firebase.")
             currentShopDataCache = newShopData
             
             for _, player in ipairs(Players:GetPlayers()) do
-                -- This is for broadcasting to everyone on reset, not for individual triggers
-                -- RemoteService:SendToClient(player, "OpenShopGUI", payload)
+                -- Notify all players that shop has been updated
+                RemoteService:SendToClient(player, "OpenShopGUI", payload)
             end
         end):catch(function(err: any)
             warn("CRITICAL: [ShopService] Gagal menulis atau mengirim data toko baru! " .. tostring(err))

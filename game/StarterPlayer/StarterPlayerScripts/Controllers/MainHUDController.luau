@@ -1,5 +1,6 @@
 --!strict
 local MainHUDController = {}
+local hudGui: ScreenGui?
 
 -- [SERVICES]
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,6 +40,7 @@ function MainHUDController:Init()
 	sg.ResetOnSpawn = false
 	sg.Enabled = false -- Wait for loading
 	sg.Parent = PLAYER_GUI
+	hudGui = sg
 
 	local container = Instance.new("Frame", sg)
 	container.Name = "TeleportContainer"
@@ -100,6 +102,12 @@ function MainHUDController:Init()
 			enableHUD()
 		end
 	end)
+end
+
+function MainHUDController.SetHUDVisible(visible: boolean)
+	if hudGui then
+		hudGui.Enabled = visible
+	end
 end
 
 return MainHUDController

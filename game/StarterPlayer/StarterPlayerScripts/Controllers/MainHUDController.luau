@@ -81,9 +81,24 @@ function MainHUDController:Init()
 	createTPButton("Teleport to Plot", "Plot")
 
 	-- Show HUD when server is ready
-	REMOTE_CLIENT:On("ServerReady", function()
+	local function enableHUD()
+		if sg.Enabled then return end
 		task.wait(1.5) -- Small delay after loading screen fades
 		sg.Enabled = true
+		print("✅ [MainHUDController] HUD enabled.")
+	end
+
+	REMOTE_CLIENT:On("ServerReady", function()
+		enableHUD()
+	end)
+
+	-- Check if server is already ready
+	task.spawn(function()
+		-- Wait for AssetManager to be ready (which happens after syncWithServerAsync)
+		while not ASSET_MANAGER.IsReady() do task.wait(0.5) end
+		if ASSET_MANAGER.CheckServerReady() then
+			enableHUD()
+		end
 	end)
 end
 

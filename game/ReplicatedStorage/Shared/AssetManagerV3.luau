@@ -26,6 +26,7 @@ local AssetManager = {}
 local assetRegistry = {} 
 local loadingPhases = {} -- New: To store loading phases
 local preloadedAssets = {} 
+local serverIsReady = false -- New: Track if server is ready during sync
 
 local isInitialized = false
 local isPreloading = false
@@ -54,38 +55,56 @@ local function flattenAndRegister(config, targetRegistry)
     end
 end
 
--- MODIFIED: Now handles the new config structure.
+-- MODIFIED: Now handles the new config structure with retry logic for race conditions.
 function AssetManager.syncWithServerAsync()
     if RunService:IsServer() then return Promise.resolve(true) end
     if isInitialized then return Promise.resolve(true) end
 
     print("🔍 [AssetManager v4.0] Meminta registry aset & fase pemuatan dari server...")
     
-    return Promise.new(function(resolve, reject)
-        RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedPayload: any)
-            if not receivedPayload or not receivedPayload.AssetConfig or not receivedPayload.LoadingConfig then
-                warn("[AssetManager v4.0] Gagal menerima payload konfigurasi dari server.")
-                reject("Payload was nil or malformed")
-                return
-            end
+    local maxRetries = 5
+    local function attemptSync(attempt: number)
+        return Promise.new(function(resolve, reject)
+            RemoteClient:InvokeServer("GetAssetRegistry"):andThen(function(receivedPayload: any)
+                if not receivedPayload or not receivedPayload.AssetConfig or not receivedPayload.LoadingConfig then
+                    if attempt < maxRetries then
+                        warn(string.format("[AssetManager v4.0] Payload tidak valid (percobaan %d/%d), mencoba lagi dalam 1 detik...", attempt, maxRetries))
+                        task.wait(1)
+                        attemptSync(attempt + 1):andThen(resolve, reject)
+                    else
+                        warn("[AssetManager v4.0] Gagal menerima payload konfigurasi setelah beberapa kali mencoba.")
+                        reject("Payload was nil or malformed")
+                    end
+                    return
+                end
 
-            -- Process both configs
-            flattenAndRegister(receivedPayload.AssetConfig, assetRegistry)
-            loadingPhases = receivedPayload.LoadingConfig.LoadingPhases
+                -- Process configs
+                flattenAndRegister(receivedPayload.AssetConfig, assetRegistry)
+                loadingPhases = receivedPayload.LoadingConfig.LoadingPhases
+                serverIsReady = receivedPayload.IsServerReady or false
 
-            isInitialized = true
-            readyEvent:Fire()
+                isInitialized = true
+                readyEvent:Fire()
+                
+                local assetCount = 0
+                for _ in pairs(assetRegistry) do assetCount = assetCount + 1 end
+                print(string.format("📦 [AssetManager v4.0] Client sinkronisasi selesai. Menerima %d aset dan %d fase pemuatan.", assetCount, #loadingPhases))
+                resolve(true)
             
-            local assetCount = 0
-            for _ in pairs(assetRegistry) do assetCount = assetCount + 1 end
-            print(string.format("📦 [AssetManager v4.0] Client sinkronisasi selesai. Menerima %d aset dan %d fase pemuatan.", assetCount, #loadingPhases))
-            resolve(true)
-        
-        end, function(err)
-            warn("[AssetManager v4.0] Panggilan InvokeServer gagal: " .. tostring(err))
-            reject(err)
+            end, function(err)
+                if attempt < maxRetries then
+                    warn(string.format("[AssetManager v4.0] Invoke gagal (percobaan %d/%d): %s. Mencoba lagi...", attempt, maxRetries, tostring(err)))
+                    task.wait(1)
+                    attemptSync(attempt + 1):andThen(resolve, reject)
+                else
+                    warn("[AssetManager v4.0] Panggilan InvokeServer gagal total: " .. tostring(err))
+                    reject(err)
+                end
+            end)
         end)
-    end)
+    end
+
+    return attemptSync(1)
 end
 
 
@@ -184,6 +203,10 @@ AssetManager.OnReady = readyEvent.Event
 
 function AssetManager.IsReady()
     return isInitialized
+end
+
+function AssetManager.CheckServerReady()
+    return serverIsReady
 end
 
 function AssetManager.get(assetName)

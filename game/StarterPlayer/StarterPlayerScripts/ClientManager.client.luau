@@ -133,16 +133,24 @@ local function updatePhase(phaseName, description)
 end
 
 -- CHANGE: Condition updated to use 'serverReady'
+local isHiding = false
 local function checkCompletionAndHide()
-	if loadingState.assetsReady and loadingState.serverReady then
-		print("✅ [ClientManager v2.0] All systems go. Hiding loading screen.")
+	if loadingState.assetsReady and loadingState.serverReady and not isHiding then
+		isHiding = true
+		print("✅ [ClientManager v2.1] All systems go. Hiding loading screen.")
 		updatePhase("Welcome to Bloxquarium!")
 		task.wait(1.0)
+		
+		if not screenGui or not screenGui.Parent then return end
+		
 		local fadeInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 		local fadeOutTween = TweenService:Create(backgroundFrame, fadeInfo, {BackgroundTransparency = 1})
 		fadeOutTween:Play()
 		fadeOutTween.Completed:Connect(function()
-			screenGui:Destroy()
+			if screenGui then
+				screenGui:Destroy()
+				screenGui = nil
+			end
 		end)
 	end
 end
@@ -184,13 +192,25 @@ MainHUDController:Init()
 -- Start the asset loading process
 AssetManager.syncWithServerAsync():andThen(function(success)
     if success then
+        -- Check if server was already ready during sync
+        if AssetManager.CheckServerReady() then
+            print("ℹ️ [ClientManager v2.1] Server already ready at sync.")
+            loadingState.serverReady = true
+        end
         AssetManager.preloadInitialAsync()
     else
         updatePhase("❌ CRITICAL ERROR: Could not sync with server.")
     end
 end)
 
--- REMOVED: The old "ClientReady" signal is no longer necessary.
--- The server now broadcasts "ServerReady" to all clients proactively.
+-- FAILSAFE: Force close loading screen if it takes too long
+task.delay(60, function()
+    if not isHiding and screenGui and screenGui.Parent then
+        warn("⚠️ [ClientManager v2.1] Loading screen timed out. Forcing completion.")
+        loadingState.assetsReady = true
+        loadingState.serverReady = true
+        checkCompletionAndHide()
+    end
+end)
 
 print("⏳ [ClientManager v2.0] Waiting for assets and server signal to complete.")

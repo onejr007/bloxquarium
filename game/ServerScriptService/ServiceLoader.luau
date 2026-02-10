@@ -80,15 +80,24 @@ function ServiceLoader:Init()
     end
     
     print("✅ [ServiceLoader] All services initialized.")
+    ServiceLoader.isReady = true
 
-    -- HOTFIX: RemoteService does not have a :SendToAllClients method.
-    -- Iterate through all players and call :SendToClient for each.
     local RemoteService = services["RemoteService"]
     if RemoteService then
+        RemoteService:SetServerReady()
         print("📣 [ServiceLoader] Broadcasting 'ServerReady' to all clients...")
         for _, player in ipairs(Players:GetPlayers()) do
             RemoteService:SendToClient(player, "ServerReady")
         end
+
+        -- Handle late joiners
+        Players.PlayerAdded:Connect(function(player)
+            if ServiceLoader.isReady then
+                task.wait(1) -- Give client a moment to initialize listeners
+                print(string.format("📣 [ServiceLoader] Sending late 'ServerReady' to %s", player.Name))
+                RemoteService:SendToClient(player, "ServerReady")
+            end
+        end)
     end
 end
 

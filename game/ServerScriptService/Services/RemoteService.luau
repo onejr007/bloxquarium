@@ -15,13 +15,19 @@ local Remote = require(ServerScriptService:WaitForChild("RemoteServer"))
 local InjectedDataService
 
 local RemoteService = {}
+local isServerReady = false
 
 -- Cached configs to avoid repeated requires
 local cachedAssetConfig
 local cachedLoadingConfig
 
 local function Log(m)
-    print(string.format("🛡️ [RemoteService v3.0] %s", m))
+    print(string.format("🛡️ [RemoteService v3.1] %s", m))
+end
+
+function RemoteService:SetServerReady()
+    isServerReady = true
+    Log("Server marked as READY.")
 end
 
 function RemoteService:Register(eventName, handler)
@@ -70,10 +76,11 @@ function RemoteService:Init(DataService)
             return nil
         end
 
-        -- Return a single table containing both configs.
+        -- Return a single table containing both configs and server status.
         return {
             AssetConfig = cachedAssetConfig,
-            LoadingConfig = cachedLoadingConfig
+            LoadingConfig = cachedLoadingConfig,
+            IsServerReady = isServerReady
         }
     end)
 

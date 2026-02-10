@@ -12,13 +12,30 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 export type ViewportManager = {
     ClassName: string,
     GetModel: (self: ViewportManager, modelName: string) -> Model?,
-    CreateModelViewport: (self: ViewportManager, parentFrame: GuiObject, modelName: string, rotation: number, scale: number) -> ViewportFrame
+    CreateModelViewport: (self: ViewportManager, parentFrame: GuiObject, modelName: string, rotation: any, scale: number?, rotateSpeed: number?) -> (ViewportFrame, Model?)
 }
 
 local ViewportManager: ViewportManager = {} :: any
 ViewportManager.ClassName = "ViewportManager"
 
 local modelCache = {}
+
+local function parseRotation(rot: any): CFrame
+    if typeof(rot) == "string" then
+        local parts = string.split(rot, ",")
+        if #parts == 3 then
+            local x = tonumber(parts[1]) or 0
+            local y = tonumber(parts[2]) or 0
+            local z = tonumber(parts[3]) or 0
+            return CFrame.Angles(math.rad(x), math.rad(y), math.rad(z))
+        end
+    elseif typeof(rot) == "number" then
+        return CFrame.Angles(0, math.rad(rot), 0)
+    elseif typeof(rot) == "CFrame" then
+        return rot
+    end
+    return CFrame.new()
+end
 
 function ViewportManager:GetModel(modelName: string): Model?
     if modelCache[modelName] then
@@ -45,7 +62,7 @@ function ViewportManager:GetModel(modelName: string): Model?
     end
 end
 
-function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: string, rotation: number, scale: number): ViewportFrame
+function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: string, rotation: any, scale: number?): (ViewportFrame, Model?)
     local viewport = Instance.new("ViewportFrame")
     viewport.Size = UDim2.new(1, 0, 1, 0)
     viewport.BackgroundTransparency = 1
@@ -57,7 +74,7 @@ function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: 
 
     local model = self:GetModel(modelName)
     if not model then 
-        return viewport 
+        return viewport, nil
     end
     model.Parent = viewport
 
@@ -71,12 +88,12 @@ function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: 
     local maxDim = math.max(modelSize.X, modelSize.Y, modelSize.Z)
     local distance = (maxDim / math.tan(math.rad(camera.FieldOfView / 2))) * (scale or 1.5)
 
-    local rotationCFrame = CFrame.Angles(0, math.rad(rotation or 0), 0)
-    local cameraPosition = center + (rotationCFrame * Vector3.new(0, maxDim * 0.2, distance))
+    local rotationCFrame = parseRotation(rotation)
+    local cameraPosition = center + (rotationCFrame * Vector3.new(0, maxDim * 0.1, distance))
     
     camera.CFrame = CFrame.new(cameraPosition, center)
 
-    return viewport
+    return viewport, model
 end
 
 return ViewportManager

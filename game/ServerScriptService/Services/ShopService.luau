@@ -213,7 +213,7 @@ function ShopService:StartBoatMovement()
 
     task.spawn(function()
         local RADIUS = 235
-        local Y_LEVEL = 14.8
+        local Y_LEVEL = 15.1
         local DEGREES_PER_SECOND = 3
         local angle = 0
         local time = 0

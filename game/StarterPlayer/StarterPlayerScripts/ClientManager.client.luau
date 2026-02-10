@@ -1,5 +1,5 @@
 --[[
-	ClientManager.client.luau (v1.5 - Added ShopClient)
+	ClientManager.client.luau (v2.0 - Robust ServerReady Handshake)
 ]]
 
 -- Services
@@ -13,30 +13,28 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Shared & Controller Modules
 local Shared = ReplicatedStorage:WaitForChild("Shared")
-local Controllers = script.Parent:WaitForChild("Controllers") -- Path to controllers
+local Controllers = script.Parent:WaitForChild("Controllers")
 
 local AssetManager = require(Shared:WaitForChild("AssetManagerV3"))
 local RemoteClient = require(Shared:WaitForChild("RemoteClient"))
 local ClientState = require(Shared:WaitForChild("ClientState"))
 
--- [NEW] Require controllers
+-- Require controllers
 local ShopClient = require(Controllers:WaitForChild("ShopClient"))
 local PlotController = require(Controllers:WaitForChild("PlotController"))
 
-
-print("🚀 [ClientManager v1.5] Implementing client-server handshake and controllers.")
-
--- UI CREATION, etc. ... (code from v1.4 is unchanged)
+print("🚀 [ClientManager v2.0] Implementing robust server-ready handshake.")
 
 -- =======================================================================
--- 1. UI CREATION (Unchanged from v1.4)
+-- 1. UI CREATION (Unchanged)
 -- =======================================================================
 
 local screenGui, backgroundFrame, progressFill, progressText, phaseLabel
-local loadingState = { assetsReady = false, worldReady = false }
+-- CHANGE: Renamed 'worldReady' to 'serverReady' for clarity
+local loadingState = { assetsReady = false, serverReady = false }
 
 local function createLoadingUI()
-	-- (The extensive UI creation code remains exactly the same as v1.4)
+	-- (The extensive UI creation code remains exactly the same)
 	screenGui = Instance.new("ScreenGui")
 	screenGui.Name = "LoadingScreen"
 	screenGui.ResetOnSpawn = false
@@ -133,9 +131,10 @@ local function updatePhase(phaseName, description)
     phaseLabel.Text = phaseName or ""
 end
 
+-- CHANGE: Condition updated to use 'serverReady'
 local function checkCompletionAndHide()
-	if loadingState.assetsReady and loadingState.worldReady then
-		print("✅ [ClientManager v1.5] All systems go. Hiding loading screen.")
+	if loadingState.assetsReady and loadingState.serverReady then
+		print("✅ [ClientManager v2.0] All systems go. Hiding loading screen.")
 		updatePhase("Welcome to Bloxquarium!")
 		task.wait(1.0)
 		local fadeInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -153,22 +152,23 @@ end
 
 createLoadingUI()
 
-print("🔌 [ClientManager v1.5] Connecting to engine events...")
+print("🔌 [ClientManager v2.0] Connecting to engine events...")
 
 -- Listen for events from other modules
 AssetManager.PhaseChanged:Connect(updatePhase)
 AssetManager.PreloadProgress:Connect(updateProgress)
 
 AssetManager.PreloadComplete:Connect(function(loaded, total)
-	print("✅ [ClientManager v1.5] Asset preloading complete.")
+	print("✅ [ClientManager v2.0] Asset preloading complete.")
 	updateProgress(total, total)
 	loadingState.assetsReady = true
 	checkCompletionAndHide()
 end)
 
-RemoteClient:On("WorldReady", function()
-	print("✅ [ClientManager v1.5] 'WorldReady' signal received.")
-	loadingState.worldReady = true
+-- NEW: Listen for the new 'ServerReady' signal from the server.
+RemoteClient:On("ServerReady", function()
+	print("✅ [ClientManager v2.0] 'ServerReady' signal received. All server data is loaded.")
+	loadingState.serverReady = true
 	checkCompletionAndHide()
 end)
 
@@ -176,7 +176,7 @@ ClientState:OnChange(function(newState)
 	-- Ready for state changes
 end)
 
--- [NEW] Initialize the ShopClient controller
+-- Initialize the ShopClient controller
 ShopClient:Init()
 
 -- Start the asset loading process
@@ -188,9 +188,7 @@ AssetManager.syncWithServerAsync():andThen(function(success)
     end
 end)
 
-print("✅ [ClientManager v1.5] Client systems configured. Notifying server.")
+-- REMOVED: The old "ClientReady" signal is no longer necessary.
+-- The server now broadcasts "ServerReady" to all clients proactively.
 
--- Tell the server we are now ready
-RemoteClient:FireServer("ClientReady")
-
-print("⏳ [ClientManager v1.5] Waiting for tasks and server handshake to complete.")
+print("⏳ [ClientManager v2.0] Waiting for assets and server signal to complete.")

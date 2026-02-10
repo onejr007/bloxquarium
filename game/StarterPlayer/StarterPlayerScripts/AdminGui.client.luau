@@ -523,5 +523,5 @@ function Boot()
     Log("Boot sequence complete.")
 end
 
-Remote:On("AdminCheckResponse", function(isAdmin) if isAdmin then if Assets.IsReady() then Boot() else Assets.OnReady:Once(Boot) end end end)
+Remote:On("AdminStatusResponse", function(isAdmin) if isAdmin then if Assets.IsReady() then Boot() else Assets.OnReady:Once(Boot) end end end)
 Remote:FireServer("RequestAdminCheck")

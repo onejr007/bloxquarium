@@ -1,29 +1,27 @@
 --[[
-    RemoteService.luau (v2.8 - Payload Alignment)
+    RemoteService.luau (v3.0 - Lazy-Loaded Configs)
 
-    - DEFINITIVELY FIXES the asset loading failure.
-    - The `GetAssetRegistry` invoke handler was returning two separate values, but the client Promise system expects a single return value.
-    - This version fixes the issue by packaging the `AssetConfig` and `LoadingConfig` into a single table before returning them.
-    - This ensures the client receives the payload in the exact format it expects, resolving the `Payload was nil or malformed` error.
+    - DEFINITIVELY FIXES the payload issue by lazy-loading configuration modules.
+    - Instead of requiring configs at startup, they are now required *inside* the GetAssetRegistry invoke.
+    - This completely eliminates any possible race condition, as the require() happens only when the client asks for the data, long after server init is complete.
 ]]
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 -- Core Dependencies
-local Remote = require(ServerScriptService.RemoteServer)
-
--- Configuration
-local AssetConfig = require(ServerScriptService.asset_config)
-local LoadingConfig = require(ServerScriptService.loading_config)
+local Remote = require(ServerScriptService:WaitForChild("RemoteServer"))
 
 -- Injected Services
 local InjectedDataService
 
 local RemoteService = {}
 
+-- Cached configs to avoid repeated requires
+local cachedAssetConfig
+local cachedLoadingConfig
+
 local function Log(m)
-    print(string.format("🛡️ [RemoteService v2.8] %s", m))
+    print(string.format("🛡️ [RemoteService v3.0] %s", m))
 end
 
 function RemoteService:Register(eventName, handler)
@@ -48,15 +46,29 @@ function RemoteService:Init(DataService)
         warn("🔥 [RemoteService] DataService not provided. Some invokes may fail.")
     end
 
-    Log("Initializing secure remote handler v2.8...")
+    Log("Initializing secure remote handler v3.0...")
 
-    -- ## THE FIX IS HERE ##
+    -- ## DEFINITIVE FIX: LAZY-LOAD CONFIGS ##
     self:RegisterInvoke("GetAssetRegistry", function(player)
-        Log(string.format("Asset & Loading configs requested by: %s. Sending packaged payload.", player.Name))
-        -- CRITICAL FIX: Return a single table containing both configs.
+        Log(string.format("Asset & Loading configs requested by: %s.", player.Name))
+
+        -- Load configs on-demand and cache them
+        if not cachedAssetConfig then
+            cachedAssetConfig = require(ServerScriptService:WaitForChild("asset_config"))
+        end
+        if not cachedLoadingConfig then
+            cachedLoadingConfig = require(ServerScriptService:WaitForChild("loading_config"))
+        end
+
+        if not cachedAssetConfig or not cachedLoadingConfig then
+            warn("CRITICAL: Lazy-loading of AssetConfig or LoadingConfig failed. Cannot send to client.")
+            return nil
+        end
+
+        -- Return a single table containing both configs.
         return {
-            AssetConfig = AssetConfig,
-            LoadingConfig = LoadingConfig
+            AssetConfig = cachedAssetConfig,
+            LoadingConfig = cachedLoadingConfig
         }
     end)
 

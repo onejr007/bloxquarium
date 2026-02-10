@@ -1,67 +1,84 @@
 --[[
-    GameActions.luau (v2.2 - Refactored for Dependency Injection)
-
-    - Handles server-side logic for remote events.
-    - Receives RemoteService via dependency injection for improved decoupling.
+    GameActions.luau (v3.1 - Added IsClientAdmin Check)
+    - Acts as the central hub for all client-invoked actions.
+    - Injects other services (AdminService, ShopService) to delegate tasks.
+    - Added a specific 'IsClientAdmin' invoke for the client to check its own admin status efficiently.
 ]]
-
---=================[ MODULES ]=================--
-local ServerScriptService = game:GetService("ServerScriptService")
--- No longer requires RemoteService directly, it will be injected.
-local AdminService = require(ServerScriptService:WaitForChild("Services"):WaitForChild("AdminService"))
 
 --=================[ CONFIGURATION ]=================--
 local GameActions = {}
+
+--=================[ INJECTED SERVICES ]=================--
+local RemoteService
+local AdminService
+local ShopService
+
+--///////////////////////////////////////////////////////////////////////////
+--// ACTION HANDLERS
+--///////////////////////////////////////////////////////////////////////////
+
+-- Example of a simple game action
+local function onKickPlayer(player, targetPlayerName)
+    if not AdminService.isAdmin(player) then
+        return false, "Permission Denied"
+    end
+
+    local targetPlayer = game:GetService("Players"):FindFirstChild(targetPlayerName)
+    if targetPlayer then
+        targetPlayer:Kick(string.format("You were kicked by an admin (%s).", player.Name))
+        return true
+    else
+        return false, string.format("Player '%s' not found.", targetPlayerName)
+    end
+end
 
 --///////////////////////////////////////////////////////////////////////////
 --// INITIALIZATION
 --///////////////////////////////////////////////////////////////////////////
 
-function GameActions:Init(RemoteService)
-    print("🎮 [GameActions] Initializing Game Actions...")
+function GameActions:Init(pRemoteService, pAdminService, pShopService)
+    print("🎮 [GameActions] Initializing Centralized Game Actions...")
 
-    if not RemoteService then
-        warn("🔥 [GameActions] RemoteService is nil. Cannot register actions.")
+    RemoteService = pRemoteService
+    AdminService = pAdminService
+    ShopService = pShopService
+
+    if not (RemoteService and AdminService and ShopService) then
+        warn("🔥 [GameActions] A required service is nil. Cannot register actions.")
         return
     end
 
-    local function onKickPlayer(player, targetPlayerName)
-        if not AdminService.isAdmin(player) then
-            -- Note: Kicking a player for a failed admin check might be too aggressive.
-            -- A simple return or a notification might be better.
-            return false, "Permission Denied"
-        end
-
-        local targetPlayer = game:GetService("Players"):FindFirstChild(targetPlayerName)
-        if targetPlayer then
-            targetPlayer:Kick(string.format("You were kicked by an admin (%s).", player.Name))
-            return true
-        else
-            return false, string.format("Player '%s' not found.", targetPlayerName)
-        end
-    end
-    
-    local function onBuyItem(player, itemId)
-        -- The core logic for buying an item should be in another service (e.g., ShopService or DataService)
-        -- GameActions should only validate and route the request.
-        print(string.format("Player %s attempting to buy item %s", player.Name, tostring(itemId)))
-        
-        -- Example: Deferring to a hypothetical service
-        -- local success, message = ShopService:PurchaseItem(player, itemId)
-        -- return success, message
-        
-        -- Placeholder logic:
-        return true, "Item purchased successfully (Placeholder)"
-    end
-
-    -- Register these actions as secure server-side invocations
-    RemoteService:RegisterInvoke("GameAction_BuyItem", onBuyItem)
-    print("   -> 'GameAction_BuyItem' registered for invocation.")
-
+    -- Register generic game actions
     RemoteService:RegisterInvoke("KickPlayer", onKickPlayer)
-    print("   -> 'KickPlayer' registered for invocation.")
-    
-    print("✅ [GameActions] Game Actions initialized successfully.")
+    print("   -> 'KickPlayer' registered.")
+
+    -- NEW: Register a dedicated check for the client's own admin status
+    RemoteService:RegisterInvoke("IsClientAdmin", function(player) 
+        return AdminService.isAdmin(player)
+    end)
+    print("   -> 'IsClientAdmin' registered for client-side UI checks.")
+
+    -- Register all ADMIN actions, delegating to AdminService
+    RemoteService:RegisterInvoke("RequestAdminList", function(player) return AdminService.GetAdminList(player) end)
+    RemoteService:RegisterInvoke("AddAdmin", function(player, target) return AdminService.AddAdmin(player, target) end)
+    RemoteService:RegisterInvoke("RemoveAdmin", function(player, targetId) return AdminService.RemoveAdmin(player, targetId) end)
+    print("   -> Admin management actions registered.")
+
+    -- Register all SHOP-ADMIN actions, delegating to AdminService/ShopService
+    RemoteService:RegisterInvoke("GetShopAdminData", function(player) return AdminService.GetShopAdminData(player) end)
+    RemoteService:RegisterInvoke("UpdateItemData", function(player, ...) return AdminService.UpdateItemData(player, ...) end)
+    RemoteService:RegisterInvoke("AddItemData", function(player, ...) return AdminService.AddItemData(player, ...) end)
+    RemoteService:RegisterInvoke("DeleteItemData", function(player, ...) return AdminService.DeleteItemData(player, ...) end)
+    RemoteService:RegisterInvoke("UpdateShopStock", function(player, ...) return ShopService.UpdateShopStock(...) end)
+    RemoteService:RegisterInvoke("AddItemToShop", function(player, ...) return ShopService.AddItemToShop(...) end)
+    RemoteService:RegisterInvoke("RemoveItemFromShop", function(player, ...) return ShopService.RemoveItemFromShop(...) end)
+    RemoteService:RegisterInvoke("ResetShopCooldown", function(player) return ShopService.ForceRegenerateShop() end)
+    RemoteService:RegisterInvoke("UpdateChanceData", function(player, ...) return ShopService.UpdateChanceData(...) end)
+    RemoteService:RegisterInvoke("AddItemToChance", function(player, ...) return ShopService.AddItemToChance(...) end)
+    RemoteService:RegisterInvoke("RemoveItemFromChance", function(player, ...) return ShopService.RemoveItemFromChance(...) end)
+    print("   -> Shop administration actions registered.")
+
+    print("✅ [GameActions] All actions initialized and registered successfully.")
 end
 
 return GameActions

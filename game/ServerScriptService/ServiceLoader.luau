@@ -1,12 +1,14 @@
 --[[
-    ServiceLoader.luau (v2.0 - ShopService Injection for Admin)
+    ServiceLoader.luau (v2.3 - Hotfix for SendToAllClients)
 ]]
 
 local ServiceLoader = {}
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local Players = game:GetService("Players")
 local ServicesFolder = ServerScriptService:WaitForChild("Services")
 
+-- Define the initialization order. GameActions is now after the services it depends on.
 local INIT_ORDER = {
     "WorldService",
     "FirebaseService",
@@ -14,11 +16,11 @@ local INIT_ORDER = {
     "DataService",
     "RemoteService",
     "ShopService",
+    "AdminService",
     "PlotService",
     "UnderwaterService",
     "LeaderboardService",
-    "GameActions",
-    "AdminService" -- AdminService tetap terakhir agar service lain bisa di-inject
+    "GameActions" -- GameActions is now initialized after AdminService and ShopService
 }
 
 local services = {}
@@ -26,6 +28,7 @@ local services = {}
 function ServiceLoader:Init()
     print("🤖 [ServiceLoader] Starting service initialization...")
 
+    -- Require all service modules first
     for _, serviceName in ipairs(INIT_ORDER) do
         local serviceModule = ServicesFolder:FindFirstChild(serviceName)
         if serviceModule and serviceModule:IsA("ModuleScript") then
@@ -37,7 +40,8 @@ function ServiceLoader:Init()
         end
     end
 
-    print("🚀 [ServiceLoader] Initializing services in order...")
+    print("🚀 [ServiceLoader] Initializing services with dependency injection...")
+    -- Initialize each service with its required dependencies
     for _, serviceName in ipairs(INIT_ORDER) do
         local service = services[serviceName]
         if not service then continue end
@@ -46,9 +50,11 @@ function ServiceLoader:Init()
             print(string.format("   -> Initializing service: %s", serviceName))
             
             local args = {}
-            -- FIX: Logika Dependency Injection diperbarui untuk AdminService
-            if serviceName == "AdminService" then
-                 args = {services["RemoteService"], services["DataService"], services["ShopService"]} -- Menambahkan ShopService
+            -- Define dependencies for each service
+            if serviceName == "GameActions" then
+                args = {services["RemoteService"], services["AdminService"], services["ShopService"]}
+            elseif serviceName == "AdminService" then
+                 args = {services["DataService"], services["ShopService"]}
             elseif serviceName == "ShopService" then
                 args = {services["RemoteService"], services["DataService"]}
             elseif serviceName == "DataService" then
@@ -61,22 +67,29 @@ function ServiceLoader:Init()
                 args = {services["DataService"]}
             elseif serviceName == "LeaderboardService" then
                 args = {services["DataService"]}
-            elseif serviceName == "GameActions" then
-                args = {services["RemoteService"]}
             end
 
+            -- Call the Init method with the specified dependencies
             local success, err = pcall(service.Init, service, unpack(args))
             if not success then error(string.format("CRITICAL: '%s' failed to init. Error: %s", serviceName, tostring(err))) end
         
         elseif serviceName == "WorldService" and service.Generate then
             print("   -> Generating world via WorldService...")
             service:Generate()
-        else
-            print(string.format("   -> Service '%s' has no Init method. Skipping.", serviceName))
         end
     end
     
     print("✅ [ServiceLoader] All services initialized.")
+
+    -- HOTFIX: RemoteService does not have a :SendToAllClients method.
+    -- Iterate through all players and call :SendToClient for each.
+    local RemoteService = services["RemoteService"]
+    if RemoteService then
+        print("📣 [ServiceLoader] Broadcasting 'ServerReady' to all clients...")
+        for _, player in ipairs(Players:GetPlayers()) do
+            RemoteService:SendToClient(player, "ServerReady")
+        end
+    end
 end
 
 function ServiceLoader:GetService(name)

@@ -22,6 +22,7 @@ local ClientState = require(Shared:WaitForChild("ClientState"))
 -- Require controllers
 local ShopClient = require(Controllers:WaitForChild("ShopClient"))
 local PlotController = require(Controllers:WaitForChild("PlotController"))
+local MainHUDController = require(Controllers:WaitForChild("MainHUDController"))
 
 print("🚀 [ClientManager v2.0] Implementing robust server-ready handshake.")
 
@@ -178,6 +179,7 @@ end)
 
 -- Initialize the ShopClient controller
 ShopClient:Init()
+MainHUDController:Init()
 
 -- Start the asset loading process
 AssetManager.syncWithServerAsync():andThen(function(success)

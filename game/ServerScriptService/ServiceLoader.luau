@@ -52,7 +52,7 @@ function ServiceLoader:Init()
             local args = {}
             -- Define dependencies for each service
             if serviceName == "GameActions" then
-                args = {services["RemoteService"], services["AdminService"], services["ShopService"]}
+                args = {services["RemoteService"], services["AdminService"], services["ShopService"], services["PlotService"]}
             elseif serviceName == "AdminService" then
                  args = {services["DataService"], services["ShopService"]}
             elseif serviceName == "ShopService" then

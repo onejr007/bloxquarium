@@ -39,6 +39,11 @@ function RemoteService:SendToClient(player, eventName, ...)
     Remote:FireClient(player, eventName, ...)
 end
 
+function RemoteService:FireAllClients(eventName, ...)
+    Log(string.format("Broadcasting client event '%s' to all players", eventName))
+    Remote:FireAllClients(eventName, ...)
+end
+
 function RemoteService:Init(DataService)
     InjectedDataService = DataService -- Dependency Injection
 

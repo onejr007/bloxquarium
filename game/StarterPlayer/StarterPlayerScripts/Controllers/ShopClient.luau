@@ -25,6 +25,8 @@ local THEME = {
 	SUCCESS = Color3.fromRGB(0, 255, 130),
 }
 
+local itemUIs = {} -- [itemId]: { stockLabel: TextLabel, updateStock: (newStock: number) -> () }
+
 -- [DECORATOR]
 local function applyDecor(inst: GuiObject, radius: number, strokeColor: Color3?)
 	local c = Instance.new("UICorner")
@@ -108,6 +110,17 @@ local function createItemEntry(id: string, data: any, stockCount: number, parent
 	stockSub.TextColor3, stockSub.Font, stockSub.TextSize = (stock > 0 and THEME.SUCCESS or THEME.DANGER), Enum.Font.GothamBold, 9
 	stockSub.BackgroundTransparency = 1
 
+	local function setStock(newStock: number)
+		stock = newStock
+		stockSub.Text = `STOK: {stock}`
+		stockSub.TextColor3 = (stock > 0 and THEME.SUCCESS or THEME.DANGER)
+		if currentQty > stock then
+			currentQty = math.max(1, stock)
+			qtyVal.Text = tostring(currentQty)
+		end
+	end
+	itemUIs[id] = { updateStock = setStock }
+
 	local bPlus = createQtyBtn("+")
 	bPlus.Parent = interaction
 
@@ -185,6 +198,7 @@ function ShopClient:Init()
 
 	REMOTE_CLIENT:On("OpenShopGUI", function(payload)
 		if not payload then return end
+		itemUIs = {} -- Reset
 		for _, v in ipairs(scroll:GetChildren()) do if not v:IsA("UIListLayout") then v:Destroy() end end
 		
 		local ORDER = {"EGG", "FISH", "FOOD", "PET", "OTHER"}
@@ -227,7 +241,16 @@ function ShopClient:Init()
 				for _, item in ipairs(list) do
 					local row, buy, getQ = createItemEntry(item.id, item.details, item.stock, itemCont)
 					buy.MouseButton1Click:Connect(function()
-						REMOTE_CLIENT:InvokeServer("GameAction_BuyItem", item.id, getQ())
+						local success, msg = REMOTE_CLIENT:InvokeServer("GameAction_BuyItem", item.id, getQ()):await()
+						
+						local oldText, oldColor = buy.Text, buy.BackgroundColor3
+						buy.Text = if success then "BERHASIL!" else "GAGAL!"
+						buy.BackgroundColor3 = if success then THEME.SUCCESS else THEME.DANGER
+						
+						task.delay(1.5, function()
+							buy.Text = oldText
+							buy.BackgroundColor3 = oldColor
+						end)
 					end)
 				end
 			end
@@ -235,7 +258,36 @@ function ShopClient:Init()
 		sg.Enabled = true
 	end)
 
-	close.MouseButton1Click:Connect(function() sg.Enabled = false end)
+	REMOTE_CLIENT:On("UpdateShopStock", function(itemId, newStock)
+		if itemUIs[itemId] then
+			itemUIs[itemId].updateStock(newStock)
+		end
+	end)
+
+	local function closeShop()
+		if sg.Enabled then
+			sg.Enabled = false
+			REMOTE_CLIENT:FireServer("ResumeBoatMovement")
+		end
+	end
+
+	close.MouseButton1Click:Connect(closeShop)
+
+	-- Auto-close if distance > 30 studs
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			if sg.Enabled then
+				local boat = workspace:FindFirstChild("PerahuShopInstance")
+				if boat and boat.PrimaryPart and PLAYER.Character and PLAYER.Character.PrimaryPart then
+					local dist = (boat.PrimaryPart.Position - PLAYER.Character.PrimaryPart.Position).Magnitude
+					if dist > 35 then
+						closeShop()
+					end
+				end
+			end
+		end
+	end)
 end
 
 return ShopClient

@@ -56,7 +56,88 @@ end
 function ShopService:UpdateShopStock(itemId: string, newStock: number)
     if not currentShopDataCache or not currentShopDataCache.item then return end
     currentShopDataCache.item[itemId] = newStock
+    RemoteService:FireAllClients("UpdateShopStock", itemId, newStock)
     return DataService:Set("/game/shop/item/" .. itemId, newStock)
+end
+
+function ShopService:ProcessPurchase(player: Player, itemId: string, quantity: number)
+    if not currentShopDataCache or not currentShopDataCache.item then
+        return false, "Toko tidak tersedia"
+    end
+
+    local stock = currentShopDataCache.item[itemId]
+    if not stock or stock < quantity then
+        return false, "Stok tidak mencukupi"
+    end
+
+    -- Security Check: Player distance to boat
+    local perahu = workspace:FindFirstChild("PerahuShopInstance")
+    if not perahu or not perahu.PrimaryPart or not player.Character or not player.Character.PrimaryPart then
+        return false, "Toko terlalu jauh"
+    end
+    local dist = (perahu.PrimaryPart.Position - player.Character.PrimaryPart.Position).Magnitude
+    if dist > 45 then
+        return false, "Anda terlalu jauh dari toko"
+    end
+
+    -- Get item details to find price and category
+    local success, itemsData = pcall(function() return self:GetItemsData():await() end)
+    if not success or not itemsData then
+        return false, "Gagal mengambil data item"
+    end
+
+    local details = nil
+    local category = nil
+    for catName, catItems in pairs(itemsData) do
+        if typeof(catItems) == "table" and catItems[itemId] then
+            details = catItems[itemId]
+            category = catName
+            break
+        end
+    end
+
+    if not details or not category then
+        return false, "Item tidak valid"
+    end
+
+    local totalPrice = (details.price or 0) * quantity
+    local playerData = DataService:Get(player)
+    if not playerData then return false, "Data pemain tidak ditemukan" end
+
+    if (playerData.Coins or 0) < totalPrice then
+        return false, "Koin tidak mencukupi"
+    end
+
+    -- Deduct Money and Update Inventory
+    playerData.Coins -= totalPrice
+    
+    if not playerData.Inventory then
+        playerData.Inventory = {
+            Fish = {},
+            Food = {},
+            Egg = {},
+            Mutation = {}
+        }
+    end
+
+    -- Map Firebase category to DataService inventory categories
+    local invKey = category:sub(1,1):upper() .. category:sub(2):lower()
+    if invKey == "Eggs" then invKey = "Egg" end
+    if invKey == "Mutations" then invKey = "Mutation" end
+    
+    if not playerData.Inventory[invKey] then
+        playerData.Inventory[invKey] = {}
+    end
+    playerData.Inventory[invKey][itemId] = (playerData.Inventory[invKey][itemId] or 0) + quantity
+
+    -- Update Stock
+    self:UpdateShopStock(itemId, stock - quantity)
+    
+    -- Save Data
+    DataService:Update(player, playerData)
+    
+    print(string.format("🛒 [ShopService] %s membeli %d x %s seharga %d", player.Name, quantity, itemId, totalPrice))
+    return true, "Pembelian berhasil!"
 end
 
 function ShopService:ForceRegenerateShop()
@@ -68,7 +149,15 @@ end
 function ShopService:AddItemToShop(itemId: string, stock: number)
     if not currentShopDataCache or not currentShopDataCache.item then return end
     currentShopDataCache.item[itemId] = stock
+    RemoteService:FireAllClients("UpdateShopStock", itemId, stock)
     return DataService:Set("/game/shop/item/" .. itemId, stock)
+end
+
+function ShopService:RemoveItemFromShop(itemId: string)
+    if not currentShopDataCache or not currentShopDataCache.item then return end
+    currentShopDataCache.item[itemId] = nil
+    RemoteService:FireAllClients("UpdateShopStock", itemId, 0)
+    return DataService:Delete("/game/shop/item/" .. itemId)
 end
 
 function ShopService:UpdateChanceData(itemId: string, data: any)
@@ -77,6 +166,10 @@ end
 
 function ShopService:AddItemToChance(itemId: string, data: any)
     return DataService:Set("/game/chance/" .. itemId, data)
+end
+
+function ShopService:RemoveItemFromChance(itemId: string)
+    return DataService:Delete("/game/chance/" .. itemId)
 end
 
 function ShopService:GetItemsData()

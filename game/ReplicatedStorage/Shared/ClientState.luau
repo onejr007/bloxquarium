@@ -14,7 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 --=================[ MODULES ]=================--
--- none
+local RemoteClient = require(script.Parent.RemoteClient)
 
 --=================[ CONFIGURATION ]=================--
 local ClientState = {}
@@ -63,8 +63,36 @@ end
 
 -- Mengatur state internal dan memberi tahu semua pelanggan.
 local function setState(newState)
-    if not newState then return end
-    print("🎨 [ClientState] State baru diterima dari server.")
+    if not newState or typeof(newState) ~= "table" then 
+        warn("🎨 [ClientState] Received invalid state (not a table):", typeof(newState))
+        return 
+    end
+    
+    -- ## FIX: Filter out multiplexed game events ##
+    -- Because RemoteServer uses the same ClientStateChannel for general events,
+    -- we must ensure we only process tables that look like actual player state.
+    if newState.eventName and newState.args then
+        -- This is a general game event, ignore it here.
+        return 
+    end
+
+    -- Validate that it's actually a state table
+    -- We'll be more lenient but log what we find
+    local hasCoins = newState.Coins ~= nil
+    local hasInv = newState.Inventory ~= nil
+    
+    if not (hasCoins or hasInv) then
+        -- Log keys found to help debugging
+        local keys = {}
+        for k in pairs(newState) do table.insert(keys, tostring(k)) end
+        warn(string.format("🎨 [ClientState] Ignoring table update - missing Coins/Inventory. Keys: %s", table.concat(keys, ", ")))
+        return
+    end
+
+    print(string.format("🎨 [ClientState] State baru diterima. Coins: %s, Inventory: %s", 
+        tostring(newState.Coins), 
+        hasInv and "Found" or "Missing"))
+        
     state = newState
     stateChanged:Fire(state) -- Beri tahu semua pelanggan tentang perubahan.
 end
@@ -74,6 +102,23 @@ local function init()
     print("🎨 [ClientState] Manajer state klien diinisialisasi, menunggu data awal dari server...")
     local channel = ReplicatedStorage:WaitForChild("ClientStateChannel")
     channel.OnClientEvent:Connect(setState)
+
+    -- Request initial state from server to ensure we don't start with empty data
+    task.spawn(function()
+        RemoteClient:WaitForConnection():andThen(function()
+            print("🎨 [ClientState] Menarik data awal (initial state) dari server...")
+            return RemoteClient:InvokeServer("GetInitialState")
+        end):andThen(function(initialState)
+            if initialState then
+                print("🎨 [ClientState] Data awal berhasil diterima via Invoke.")
+                setState(initialState)
+            else
+                warn("🎨 [ClientState] Gagal mengambil data awal atau data masih kosong.")
+            end
+        end):catch(function(err)
+            warn("🎨 [ClientState] Error saat mengambil data awal:", tostring(err))
+        end)
+    end)
 end
 
 -- PERBAIKAN: Pastikan inisialisasi HANYA berjalan di klien untuk mencegah error di server.

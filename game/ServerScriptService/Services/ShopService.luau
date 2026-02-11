@@ -355,42 +355,42 @@ function ShopService:StartBoatMovement()
 end
 
 function ShopService:StartShopCycle()
-    local function cycle()
-        print("🛍️ [ShopService] Mengecek status toko...")
-        self:GetShopData():andThen(function(shopData: any)
-            local now = os.time()
-            local needsReset = false
-            local remainingTime = 0
+        local function cycle()
+            print("🛍️ [ShopService] Mengecek status toko...")
+            self:GetShopData():andThen(function(shopData: any)
+                local now = os.time()
+                local needsReset = false
+                local remainingTime = 0
 
-            if not shopData or not shopData["end"] then
-                needsReset = true
-            else
-                local endTime = self:ParseISO8601(shopData["end"])
-                remainingTime = (endTime :: number) - now
-                if remainingTime <= 0 then
+                if not shopData or not shopData["end"] then
                     needsReset = true
+                else
+                    local endTime = self:ParseISO8601(shopData["end"])
+                    remainingTime = (endTime :: number) - now
+                    if remainingTime <= 0 then
+                        needsReset = true
+                    end
                 end
-            end
 
-            if needsReset then
-                print("🛍️ [ShopService] Toko kedaluwarsa atau kosong. Mereset...")
-                self:ResetShop()
-                task.wait(30) 
+                if needsReset then
+                    print("🛍️ [ShopService] Toko kedaluwarsa atau kosong. Mereset...")
+                    self:ResetShop()
+                    task.wait(30) 
+                    cycle()
+                else
+                    currentShopDataCache = shopData
+                    print(string.format("🛍️ [ShopService] Toko masih valid. Reset berikutnya dalam %d detik.", remainingTime))
+                    task.wait(math.min(remainingTime, 300))
+                    cycle()
+                end
+            end):catch(function(err: any)
+                warn("[ShopService] Gagal sinkronisasi toko. Mencoba lagi dalam 60 detik. Error: " .. tostring(err))
+                task.wait(60)
                 cycle()
-            else
-                currentShopDataCache = shopData
-                print(string.format("🛍️ [ShopService] Toko masih valid. Reset berikutnya dalam %d detik.", remainingTime))
-                task.wait(math.min(remainingTime, 300))
-                cycle()
-            end
-        end):catch(function(err: any)
-            warn("[ShopService] Gagal sinkronisasi toko. Mencoba lagi dalam 60 detik. Error: " .. tostring(err))
-            task.wait(60)
-            cycle()
-        end)
-    end
+            end)
+        end
 
-    task.spawn(cycle)
+        task.spawn(cycle)
 end
 
 function ShopService:GetShopData()

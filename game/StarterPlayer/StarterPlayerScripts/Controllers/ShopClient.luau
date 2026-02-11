@@ -215,8 +215,10 @@ function ShopClient:Init()
 			local diff = destTime - now
 			if diff <= 0 then
 				timerLabel.Text = "RESETTING..."
-				timerConn:Disconnect()
-				timerConn = nil
+				if timerConn then
+					timerConn:Disconnect()
+					timerConn = nil
+				end
 				return
 			end
 			

@@ -103,56 +103,55 @@ local function createUnderwaterGui(onClose)
     menuContainer.Parent = sg
 
     -- Submenu for Inventory (CanvasGroup for professional fade/masking)
-    local invMenu = Instance.new("CanvasGroup")
-    invMenu.Name = "InventoryMenu"
-    invMenu.Size = UDim2.fromOffset(250, 400)
-    invMenu.Position = UDim2.new(0, -25, 1, -110)
-    invMenu.AnchorPoint = Vector2.new(1, 1)
-    invMenu.BackgroundColor3 = THEME.PRIMARY
-    invMenu.GroupTransparency = 1
-    invMenu.Visible = false
-    invMenu.Parent = menuContainer
+    local menu_frame = Instance.new("CanvasGroup")
+    menu_frame.Name = "menu_frame"
+    menu_frame.Size = UDim2.fromOffset(500, 150)
+    menu_frame.Position = UDim2.new(0, -25, 1, -110)
+    menu_frame.AnchorPoint = Vector2.new(1, 1)
+    menu_frame.BackgroundColor3 = THEME.PRIMARY
+    menu_frame.GroupTransparency = 1
+    menu_frame.Visible = false
+    menu_frame.Parent = menuContainer
     
-    local invMenuGrad = Instance.new("UIGradient")
-    invMenuGrad.Color = ColorSequence.new({
+    local menuFrameGrad = Instance.new("UIGradient")
+    menuFrameGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 35, 60)),
         ColorSequenceKeypoint.new(1, THEME.SECONDARY)
     })
-    invMenuGrad.Rotation = 45
-    invMenuGrad.Parent = invMenu
+    menuFrameGrad.Rotation = 45
+    menuFrameGrad.Parent = menu_frame
     
     local uiCornerM = Instance.new("UICorner")
     uiCornerM.CornerRadius = UDim.new(0, 15)
-    uiCornerM.Parent = invMenu
+    uiCornerM.Parent = menu_frame
     
-    local uiStrokeM = Instance.new("UIStroke")
-    uiStrokeM.Color = THEME.ACCENT
-    uiStrokeM.Thickness = 2
-    uiStrokeM.Transparency = 0.5
-    uiStrokeM.Parent = invMenu
+    -- REMOVED UIStroke from menu_frame as requested
 
     local invTitle = Instance.new("TextLabel")
-    invTitle.Size = UDim2.new(1, 0, 0, 45)
+    invTitle.Size = UDim2.new(1, 0, 0, 35)
     invTitle.BackgroundTransparency = 1
     invTitle.Text = "INVENTORY"
     invTitle.TextColor3 = THEME.WHITE
     invTitle.Font = Enum.Font.GothamBlack
-    invTitle.TextSize = 16
-    invTitle.Parent = invMenu
+    invTitle.TextSize = 14
+    invTitle.Parent = menu_frame
     
     local invScroll = Instance.new("ScrollingFrame")
-    invScroll.Size = UDim2.new(1, -20, 1, -65)
-    invScroll.Position = UDim2.fromOffset(10, 50)
+    invScroll.Size = UDim2.new(1, -20, 1, -45)
+    invScroll.Position = UDim2.fromOffset(10, 40)
     invScroll.BackgroundTransparency = 1
     invScroll.ScrollBarThickness = 3
     invScroll.ScrollBarImageColor3 = THEME.ACCENT
     invScroll.CanvasSize = UDim2.fromScale(0, 0)
-    invScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    invScroll.Parent = invMenu
+    invScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+    invScroll.ScrollingDirection = Enum.ScrollingDirection.X
+    invScroll.Parent = menu_frame
     
     local invListLayout = Instance.new("UIListLayout")
-    invListLayout.Padding = UDim.new(0, 10)
-    invListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    invListLayout.Padding = UDim.new(0, 15)
+    invListLayout.FillDirection = Enum.FillDirection.Horizontal
+    invListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    invListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     invListLayout.Parent = invScroll
 
     local function createIconButton(icon, position, size, name)
@@ -164,12 +163,7 @@ local function createUnderwaterGui(onClose)
         btn.Image = FRAME_ICO
         btn.AnchorPoint = Vector2.new(0.5, 0.5)
         
-        local btnStroke = Instance.new("UIStroke")
-        btnStroke.Color = THEME.WHITE
-        btnStroke.Thickness = 2
-        btnStroke.Transparency = 0.9
-        btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-        btnStroke.Parent = btn
+        -- REMOVED UIStroke from buttons as requested
         
         local innerIcon = Instance.new("ImageLabel")
         innerIcon.Size = UDim2.fromScale(0.6, 0.6)
@@ -182,12 +176,10 @@ local function createUnderwaterGui(onClose)
         btn.MouseEnter:Connect(function()
             TweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.fromOffset((size or 60) + 10, (size or 60) + 10)}):Play()
             TweenService:Create(innerIcon, TweenInfo.new(0.3), {ImageColor3 = THEME.ACCENT}):Play()
-            TweenService:Create(btnStroke, TweenInfo.new(0.3), {Transparency = 0.4, Color = THEME.ACCENT}):Play()
         end)
         btn.MouseLeave:Connect(function()
             TweenService:Create(btn, TweenInfo.new(0.3, Enum.EasingStyle.Back), {Size = UDim2.fromOffset(size or 60, size or 60)}):Play()
             TweenService:Create(innerIcon, TweenInfo.new(0.3), {ImageColor3 = THEME.WHITE}):Play()
-            TweenService:Create(btnStroke, TweenInfo.new(0.3), {Transparency = 0.9, Color = THEME.WHITE}):Play()
         end)
         
         return btn
@@ -254,7 +246,9 @@ local function createUnderwaterGui(onClose)
     -- Sync Coins
     local lastCoins = -1 -- Start with -1 to force first update
     local function updateCoins(state)
+        print("💰 [PlotController] Coin Update Triggered. State:", state)
         if state and state.Coins ~= nil then
+            print("💰 [PlotController] Updating Coins to:", state.Coins)
             if state.Coins ~= lastCoins then
                 lastCoins = state.Coins
                 coinLabel.Text = tostring(state.Coins)
@@ -267,29 +261,70 @@ local function createUnderwaterGui(onClose)
                     end)
                 end
             end
+        else
+            warn("💰 [PlotController] State received but Coins field is missing!")
         end
     end
     
-    -- ClientState:OnChange already calls the callback immediately with current state
-    ClientState:OnChange(updateCoins)
+    local isOpen = false
+    local currentMenu = nil -- "Fish", "Egg", "Food"
+
+    -- Sync Inventory Reactively
+    ClientState:OnChange(function(state)
+        updateCoins(state)
+        
+        -- If inventory menu is open, refresh the current category
+        if currentMenu and isOpen then
+            print("📦 [PlotController] State change detected, refreshing inventory:", currentMenu)
+            populateInventory(currentMenu)
+        end
+    end)
 
     local function populateInventory(category: string)
+        print("🔍 [Inventory] Populating category:", category)
+        
         for _, child in ipairs(invScroll:GetChildren()) do
             if child:IsA("GuiObject") then child:Destroy() end
         end
         
         local state = ClientState:GetState()
-        local inventory = state.Inventory and state.Inventory[category] or {}
+        
+        -- ## FIX: Wait for valid state if empty ##
+        if not state or not state.Inventory then
+            print("📊 [Inventory] State is empty, waiting for initialization...")
+            invTitle.Text = "LOADING DATA..."
+            
+            -- Set up a one-time listener to re-populate when state arrives
+            local conn
+            conn = ClientState:OnChange(function(newState)
+                if newState and newState.Inventory then
+                    if conn then conn() end -- Unsubscribe
+                    populateInventory(category)
+                end
+            end)
+            return
+        end
+        
+        print("📊 [Inventory] Full State Received. Keys:", (function() local keys={} for k in pairs(state) do table.insert(keys, k) end return table.concat(keys, ", ") end)())
+        
+        local inventory = state.Inventory[category]
+        if not inventory then
+            warn(string.format("⚠️ [Inventory] Category '%s' not found in state.Inventory!", category))
+            inventory = {}
+        end
+        
+        print(string.format("📦 [Inventory] Found %d item keys in %s", (function() local c=0 for _ in pairs(inventory) do c+=1 end return c end)(), category))
         
         invTitle.Text = category:upper() .. " INVENTORY"
         
         local itemsFound = 0
         for id, count in pairs(inventory) do
-            if count <= 0 then continue end
+            print(string.format("  -> [Entry] ID: %s, Value: %s (Type: %s)", tostring(id), tostring(count), typeof(count)))
+            if typeof(count) == "number" and count <= 0 then continue end
             itemsFound += 1
             
             local item = Instance.new("Frame")
-            item.Size = UDim2.new(1, 0, 0, 70)
+            item.Size = UDim2.fromOffset(100, 100)
             item.BackgroundColor3 = Color3.fromRGB(30, 45, 75)
             item.Parent = invScroll
             
@@ -298,53 +333,115 @@ local function createUnderwaterGui(onClose)
             itemCorner.Parent = item
             
             local vpfFrame = Instance.new("Frame", item)
-            vpfFrame.Size = UDim2.fromOffset(60, 60)
-            vpfFrame.Position = UDim2.fromOffset(5, 5)
+            vpfFrame.Size = UDim2.fromScale(0.8, 0.8)
+            vpfFrame.Position = UDim2.fromScale(0.5, 0.4)
+            vpfFrame.AnchorPoint = Vector2.new(0.5, 0.5)
             vpfFrame.BackgroundTransparency = 1
             
+            -- ## FIX: Wait for Assets to be ready before getting item data ##
+            if not Assets.IsReady() then
+                print(string.format("  -> [Inventory] Assets not ready for ID %s, waiting...", id))
+                Assets.OnReady:Wait()
+            end
+
             -- Resolve item data from database via AssetManager
             local itemData = Assets.GetItemData(id)
-            local displayName = if itemData then itemData.name else id:gsub("id_%a+_", ""):gsub("^%l", string.upper)
-            local modelName = if itemData then (itemData.mInfoName or itemData.mDropName) else displayName
             
-            ViewportManager:CreateModelViewport(vpfFrame, modelName, 0, 1.2)
+            -- ## NEW: Detailed Model Resolution from Database ##
+            local displayName = id -- Fallback
+            local modelName = nil -- CRITICAL: Set to nil to force fallback check
+            local rotation = 0 -- Fallback
+            local scale = 1.2 -- Default scale
+            
+            if itemData then
+                displayName = itemData.name or id
+                -- 1. Determine Model Name (mInfoName -> mDropName -> name)
+                modelName = itemData.mInfoName or itemData.mDropName or itemData.name
+                
+                -- 2. Determine Rotation (mInfoRotate)
+                if itemData.mInfoRotate then
+                    rotation = itemData.mInfoRotate
+                end
+                
+                -- 3. Determine Scale (mInfoScale)
+                if itemData.mInfoScale then
+                    scale = tonumber(itemData.mInfoScale) or 1.2
+                end
+                
+                print(string.format("  -> [Item Config] SUCCESS! Name: %s, Model: %s, Rot: %s, Scale: %s", 
+                    displayName, tostring(modelName), tostring(rotation), tostring(scale)))
+            else
+                -- Fallback clean display name for better logs
+                displayName = id:gsub("id_%a+_", ""):gsub("^%l", string.upper)
+                warn(string.format("  -> [Item Config] FAILED: ID %s not found in Registry! (Size: %d)", 
+                    id, (function() local c=0 for _ in pairs(Assets.GetItemRegistry()) do c+=1 end return c end)()))
+            end
+            
+            -- FINAL SAFETY CHECK: If modelName is still nil/empty, it means itemData was missing or malformed
+            if not modelName or modelName == "" then
+                warn(string.format("  -> [CRITICAL] Model for %s is missing! Viewport will be empty.", id))
+                modelName = "Placeholder" -- Use a specific placeholder name instead of the numeric ID
+            end
+            
+            print(string.format("  -> [Item Render] %s (Count: %s, Model: %s)", displayName, tostring(count), modelName))
+            
+            ViewportManager:CreateModelViewport(vpfFrame, modelName, rotation, scale)
             
             local nLbl = Instance.new("TextLabel", item)
-            nLbl.Size = UDim2.new(1, -80, 0, 20)
-            nLbl.Position = UDim2.fromOffset(75, 15)
+            nLbl.Size = UDim2.new(1, 0, 0, 20)
+            nLbl.Position = UDim2.new(0, 0, 1, -20)
             nLbl.BackgroundTransparency = 1
             nLbl.Text = displayName:upper()
             nLbl.TextColor3 = THEME.WHITE
             nLbl.Font = Enum.Font.GothamBold
-            nLbl.TextSize = 13
-            nLbl.TextXAlignment = Enum.TextXAlignment.Left
+            nLbl.TextSize = 10
+            nLbl.TextWrapped = true
             
-            local cLbl = Instance.new("TextLabel", item)
-            cLbl.Size = UDim2.new(1, -80, 0, 15)
-            cLbl.Position = UDim2.fromOffset(75, 35)
-            cLbl.BackgroundTransparency = 1
-            cLbl.Text = "OWNED: " .. tostring(count)
-            cLbl.TextColor3 = THEME.ACCENT
-            cLbl.Font = Enum.Font.GothamMedium
-            cLbl.TextSize = 11
-            cLbl.TextXAlignment = Enum.TextXAlignment.Left
+            -- Stock Bubble
+            local bubble = Instance.new("Frame")
+            bubble.Name = "StockBubble"
+            bubble.Size = UDim2.fromOffset(24, 24)
+            bubble.Position = UDim2.new(1, -5, 0, 5)
+            bubble.AnchorPoint = Vector2.new(1, 0)
+            bubble.BackgroundColor3 = THEME.ACCENT
+            bubble.ZIndex = 10 -- Higher ZIndex to ensure it's on top
+            bubble.Parent = item
+            
+            local bCorner = Instance.new("UICorner")
+            bCorner.CornerRadius = UDim.new(1, 0)
+            bCorner.Parent = bubble
+            
+            local bStroke = Instance.new("UIStroke")
+            bStroke.Thickness = 2
+            bStroke.Color = Color3.new(1, 1, 1)
+            bStroke.Transparency = 0.5
+            bStroke.Parent = bubble
+
+            local bLbl = Instance.new("TextLabel")
+            bLbl.Size = UDim2.fromScale(0.8, 0.8)
+            bLbl.Position = UDim2.fromScale(0.5, 0.5)
+            bLbl.AnchorPoint = Vector2.new(0.5, 0.5)
+            bLbl.BackgroundTransparency = 1
+            bLbl.Text = tostring(count)
+            bLbl.TextColor3 = THEME.WHITE
+            bLbl.Font = Enum.Font.GothamBlack
+            bLbl.TextScaled = true -- Make sure text fits
+            bLbl.ZIndex = 11
+            bLbl.Parent = bubble
         end
         
         if itemsFound == 0 then
             local empty = Instance.new("TextLabel", invScroll)
-            empty.Size = UDim2.new(1, 0, 0, 50)
+            empty.Size = UDim2.new(0, 200, 1, 0)
             empty.BackgroundTransparency = 1
             empty.Font = Enum.Font.Gotham
-            empty.Text = "Inventory is empty"
-            empty.RichText = true
+            empty.TextColor3 = THEME.WHITE
             empty.Text = "<i>Inventory is empty</i>"
+            empty.RichText = true
             empty.TextSize = 12
         end
     end
 
-    local isOpen = false
-    local currentMenu = nil -- "Fish", "Egg", "Food"
-    
     local function toggleSubMenu(menuType)
         -- Map GUI categories to Database Inventory keys
         local dbCategory = menuType
@@ -355,14 +452,14 @@ local function createUnderwaterGui(onClose)
         if currentMenu == menuType then
             -- Close
             currentMenu = nil
-            TweenService:Create(invMenu, TweenInfo.new(0.3), {GroupTransparency = 1, Position = UDim2.new(0, -10, 1, -110)}):Play()
-            task.delay(0.3, function() if not currentMenu then invMenu.Visible = false end end)
+            TweenService:Create(menu_frame, TweenInfo.new(0.3), {GroupTransparency = 1, Position = UDim2.new(0, -10, 1, -110)}):Play()
+            task.delay(0.3, function() if not currentMenu then menu_frame.Visible = false end end)
         else
             -- Open/Switch
             currentMenu = menuType
             populateInventory(dbCategory)
-            invMenu.Visible = true
-            TweenService:Create(invMenu, TweenInfo.new(0.4, Enum.EasingStyle.Back), {GroupTransparency = 0, Position = UDim2.new(0, -25, 1, -110)}):Play()
+            menu_frame.Visible = true
+            TweenService:Create(menu_frame, TweenInfo.new(0.4, Enum.EasingStyle.Back), {GroupTransparency = 0, Position = UDim2.new(0, -25, 1, -110)}):Play()
         end
     end
 

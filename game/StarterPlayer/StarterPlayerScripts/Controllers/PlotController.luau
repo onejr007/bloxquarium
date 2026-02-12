@@ -65,6 +65,24 @@ local function setControlsEnabled(enabled: boolean)
 end
 
 --------------------------------------------------
+-- UTILS
+--------------------------------------------------
+local function parseRotation(rot: any): CFrame
+	if typeof(rot) == "string" then
+		local parts = string.split(rot, ",")
+		if #parts == 3 then
+			local x = tonumber(parts[1]) or 0
+			local y = tonumber(parts[2]) or 0
+			local z = tonumber(parts[3]) or 0
+			return CFrame.Angles(math.rad(x), math.rad(y), math.rad(z))
+		end
+	elseif typeof(rot) == "number" then
+		return CFrame.Angles(0, math.rad(rot), 0)
+	end
+	return CFrame.new()
+end
+
+--------------------------------------------------
 -- LOADING SCREEN
 --------------------------------------------------
 local function createLoadingScreen()
@@ -549,7 +567,8 @@ local function createUnderwaterGui(onClose: () -> ())
 				vpf,
 				modelName,
 				itemData and itemData.mInfoRotate or 0,
-				itemData and tonumber(itemData.mInfoScale) or 0.9
+				itemData and tonumber(itemData.mInfoScale) or 0.9,
+				itemData -- Pass metadata (mInfoRotate, mInfoScale)
 			)
 
 			local nameLbl = Instance.new("TextLabel", item)
@@ -835,7 +854,26 @@ function PlotController:AnimateFoodDrop(foodId: string, position: Vector3)
 	
 	local drop = foodModel:Clone()
 	drop.Parent = workspace:FindFirstChild("UnderwaterWorld") or workspace
-	drop:PivotTo(CFrame.new(position))
+	
+	-- Apply mDropRotate and mDropScale
+	local dropRotate = itemData and itemData.mDropRotate or "0,0,0"
+	local dropScale = itemData and itemData.mDropScale or 1
+	
+	local rotationCFrame = parseRotation(dropRotate)
+	drop:PivotTo(CFrame.new(position) * rotationCFrame)
+	
+	if dropScale ~= 1 then
+		if drop.PrimaryPart then
+			drop:ScaleTo(dropScale)
+		else
+			-- Fallback if no PrimaryPart
+			for _, part in ipairs(drop:GetDescendants()) do
+				if part:IsA("BasePart") then
+					part.Size *= dropScale
+				end
+			end
+		end
+	end
 	
 	-- Fall animation
 	local floorY = UNDERWATER_POS.Y - (AQUARIUM_SIZE.Y / 2)
@@ -900,14 +938,30 @@ function PlotController:StartFoodDropMode(foodId: string)
 		log("Found food model, cloning...")
 		activeFoodModel = foodModel:Clone()
 		
+		-- Apply mDropRotate and mDropScale for preview
+		local dropRotate = itemData and itemData.mDropRotate or "0,0,0"
+		local dropScale = itemData and itemData.mDropScale or 1
+		local rotationCFrame = parseRotation(dropRotate)
+		
 		-- Set initial position immediately
 		local targetPos = getMousePlanePos(mouse)
 		if targetPos then
-			activeFoodModel:PivotTo(CFrame.new(targetPos))
+			activeFoodModel:PivotTo(CFrame.new(targetPos) * rotationCFrame)
 		end
 		
 		activeFoodModel.Parent = workspace:FindFirstChild("UnderwaterWorld") or workspace
 		log("Preview model parented to UnderwaterWorld at pivot:", activeFoodModel:GetPivot())
+		
+		if dropScale ~= 1 then
+			if activeFoodModel.PrimaryPart then
+				activeFoodModel:ScaleTo(dropScale)
+			else
+				for _, part in ipairs(activeFoodModel:GetDescendants()) do
+					if part:IsA("BasePart") then part.Size *= dropScale end
+				end
+			end
+		end
+
 		for _, part in ipairs(activeFoodModel:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
@@ -941,7 +995,9 @@ function PlotController:StartFoodDropMode(foodId: string)
 						  targetPos.Y >= minBound.Y and targetPos.Y <= maxBound.Y)
 		
 		if activeFoodModel then
-			activeFoodModel:PivotTo(CFrame.new(targetPos))
+			local dropRotate = itemData and itemData.mDropRotate or "0,0,0"
+			local rotationCFrame = parseRotation(dropRotate)
+			activeFoodModel:PivotTo(CFrame.new(targetPos) * rotationCFrame)
 			
 			-- Color indicator
 			local color = inBounds and Color3.new(0, 1, 0) or Color3.new(1, 0, 0)

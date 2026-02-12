@@ -20,6 +20,7 @@ local INIT_ORDER = {
     "PlotService",
     "UnderwaterService",
     "LeaderboardService",
+    "InventoryService",
     "GameActions" -- GameActions is now initialized after AdminService and ShopService
 }
 

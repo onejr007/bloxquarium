@@ -62,7 +62,7 @@ function ViewportManager:GetModel(modelName: string): Model?
     end
 end
 
-function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: string, rotation: any, scale: number?): (ViewportFrame, Model?)
+function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: string, rotation: any, scale: number?, metadata: {mInfoRotate: string?, mInfoScale: number?}?): (ViewportFrame, Model?)
     local viewport = Instance.new("ViewportFrame")
     viewport.Size = UDim2.new(1, 0, 1, 0)
     viewport.BackgroundTransparency = 1
@@ -82,13 +82,33 @@ function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: 
         model.PrimaryPart = model:GetChildren()[1]
     end
 
+    -- Apply metadata transformations if provided
+    local infoRotate = rotation
+    local infoScale = scale or 1.5
+
+    if metadata then
+        if metadata.mInfoRotate then
+            infoRotate = metadata.mInfoRotate
+        end
+        if metadata.mInfoScale then
+            -- Scale the model itself if mInfoScale is provided
+            if model.PrimaryPart then
+                model:ScaleTo(metadata.mInfoScale)
+            else
+                for _, part in ipairs(model:GetDescendants()) do
+                    if part:IsA("BasePart") then part.Size *= metadata.mInfoScale end
+                end
+            end
+        end
+    end
+
     local boundingBoxCFrame, modelSize = model:GetBoundingBox()
     local center = boundingBoxCFrame.p 
     
     local maxDim = math.max(modelSize.X, modelSize.Y, modelSize.Z)
-    local distance = (maxDim / math.tan(math.rad(camera.FieldOfView / 2))) * (scale or 1.5)
+    local distance = (maxDim / math.tan(math.rad(camera.FieldOfView / 2))) * infoScale
 
-    local rotationCFrame = parseRotation(rotation)
+    local rotationCFrame = parseRotation(infoRotate)
     local cameraPosition = center + (rotationCFrame * Vector3.new(0, maxDim * 0.1, distance))
     
     camera.CFrame = CFrame.new(cameraPosition, center)

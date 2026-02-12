@@ -5,7 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UnderwaterService = {}
 UnderwaterService.ServiceName = "UnderwaterService"
 
-local UNDERWATER_POS = Vector3.new(5000, -100, 5000)
+local UNDERWATER_POS = Vector3.new(5000, -82.5, 5000)
 
 function UnderwaterService:Init(DataService, RemoteService)
     print("🌊 [UnderwaterService] Initializing Underwater World...")
@@ -25,6 +25,11 @@ function UnderwaterService:PrepareAquariumForPlayer(visitor: Player, owner: Play
     print(string.format("🌊 [UnderwaterService] Preparing view for %s (Visiting %s)", visitor.Name, owner.Name))
 end
 
+function UnderwaterService:GetAquariumBounds()
+    local boxSize = Vector3.new(60, 35, 8)
+    return UNDERWATER_POS, boxSize
+end
+
 function UnderwaterService:GenerateUnderwaterArea()
     local container = Instance.new("Folder")
     container.Name = "UnderwaterWorld"
@@ -32,12 +37,13 @@ function UnderwaterService:GenerateUnderwaterArea()
     
     -- Shrink Box size: Narrower depth (Z) for true 2.5D/2D feeling
     local boxSize = Vector3.new(60, 35, 8)
+    local halfY = boxSize.Y / 2
     
     -- Floor (Sand/Gravel)
     local floor = Instance.new("Part")
     floor.Name = "UnderwaterFloor"
     floor.Size = Vector3.new(boxSize.X + 2, 1, boxSize.Z)
-    floor.Position = UNDERWATER_POS - Vector3.new(0, 0.5, 0)
+    floor.Position = UNDERWATER_POS - Vector3.new(0, halfY + 0.5, 0)
     floor.Anchored = true
     floor.Material = Enum.Material.Sand
     floor.Color = Color3.fromRGB(180, 170, 130)
@@ -46,11 +52,12 @@ function UnderwaterService:GenerateUnderwaterArea()
     -- Background Wall (Large enough to cover camera frustum)
     local backWall = Instance.new("Part")
     backWall.Name = "BackgroundWall"
-    backWall.Size = Vector3.new(boxSize.X + 40, boxSize.Y + 30, 1)
-    backWall.Position = UNDERWATER_POS - Vector3.new(0, -boxSize.Y/2 + 5, boxSize.Z/2)
+    backWall.Size = Vector3.new(boxSize.X + 100, boxSize.Y + 60, 1)
+    backWall.Position = UNDERWATER_POS - Vector3.new(0, 0, boxSize.Z/2 + 2) -- Mundurkan sedikit lagi agar tidak z-fight
     backWall.Anchored = true
     backWall.Material = Enum.Material.Concrete
     backWall.Color = Color3.fromRGB(10, 35, 70)
+    backWall.CastShadow = false
     backWall.Parent = container
     
     local function createGlassWall(size, pos, transparency)
@@ -68,20 +75,20 @@ function UnderwaterService:GenerateUnderwaterArea()
     end
     
     -- Left & Right Walls
-    createGlassWall(Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(boxSize.X/2, boxSize.Y/2, 0))
-    createGlassWall(Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(-boxSize.X/2, boxSize.Y/2, 0))
+    createGlassWall(Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(boxSize.X/2, 0, 0))
+    createGlassWall(Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(-boxSize.X/2, 0, 0))
     
     -- Front Wall (Facing camera)
-    createGlassWall(Vector3.new(boxSize.X, boxSize.Y, 1), UNDERWATER_POS + Vector3.new(0, boxSize.Y/2, boxSize.Z/2), 0.95)
+    createGlassWall(Vector3.new(boxSize.X, boxSize.Y, 1), UNDERWATER_POS + Vector3.new(0, 0, boxSize.Z/2), 0.95)
     
     -- Top/Ceiling
-    createGlassWall(Vector3.new(boxSize.X, 1, boxSize.Z), UNDERWATER_POS + Vector3.new(0, boxSize.Y, 0), 0.9)
+    createGlassWall(Vector3.new(boxSize.X, 1, boxSize.Z), UNDERWATER_POS + Vector3.new(0, halfY, 0), 0.9)
 
     -- Define Aquarium Bounds for 2D Logic (Invisible Part)
     local bounds = Instance.new("Part")
     bounds.Name = "AquariumBounds"
     bounds.Size = boxSize
-    bounds.Position = UNDERWATER_POS + Vector3.new(0, boxSize.Y/2, 0)
+    bounds.Position = UNDERWATER_POS
     bounds.Anchored = true
     bounds.Transparency = 1
     bounds.CanCollide = false

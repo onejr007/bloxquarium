@@ -63,38 +63,33 @@ end
 
 -- Mengatur state internal dan memberi tahu semua pelanggan.
 local function setState(newState)
-    if not newState or typeof(newState) ~= "table" then 
-        warn("🎨 [ClientState] Received invalid state (not a table):", typeof(newState))
-        return 
-    end
-    
-    -- ## FIX: Filter out multiplexed game events ##
-    -- Because RemoteServer uses the same ClientStateChannel for general events,
-    -- we must ensure we only process tables that look like actual player state.
-    if newState.eventName and newState.args then
-        -- This is a general game event, ignore it here.
-        return 
-    end
-
-    -- Validate that it's actually a state table
-    -- We'll be more lenient but log what we find
-    local hasCoins = newState.Coins ~= nil
-    local hasInv = newState.Inventory ~= nil
-    
-    if not (hasCoins or hasInv) then
-        -- Log keys found to help debugging
-        local keys = {}
-        for k in pairs(newState) do table.insert(keys, tostring(k)) end
-        warn(string.format("🎨 [ClientState] Ignoring table update - missing Coins/Inventory. Keys: %s", table.concat(keys, ", ")))
+    if type(newState) ~= "table" then
         return
     end
 
-    print(string.format("🎨 [ClientState] State baru diterima. Coins: %s, Inventory: %s", 
-        tostring(newState.Coins), 
-        hasInv and "Found" or "Missing"))
-        
+    -- ## FILTER: Abaikan event game umum (multiplexed) ##
+    -- Karena RemoteServer menggunakan ClientStateChannel untuk semua event,
+    -- kita harus mengabaikan payload yang berisi 'eventName' (itu adalah event, bukan state).
+    if newState.eventName and newState.args then
+        return 
+    end
+
+    -- Validasi minimal: Harus punya Coins atau Inventory untuk dianggap sebagai state
+    if newState.Coins == nil and newState.Inventory == nil then
+        -- Opsional: log jika perlu debug, tapi biasanya ini adalah event lain yang tidak terfilter
+        return
+    end
+
     state = newState
-    stateChanged:Fire(state) -- Beri tahu semua pelanggan tentang perubahan.
+    
+    -- Helper to get keys for logging
+    local invKeys = {}
+    if state.Inventory and typeof(state.Inventory) == "table" then
+        for k in pairs(state.Inventory) do table.insert(invKeys, tostring(k)) end
+    end
+    
+    print("🎨 [ClientState] State updated. Coins:", state.Coins, "Inventory categories:", #invKeys > 0 and table.concat(invKeys, ", ") or "none")
+    stateChanged:Fire(state)
 end
 
 -- Inisialisasi: Tunggu server mengirimkan state awal.

@@ -70,6 +70,10 @@ function RemoteService:Init(DataService)
             if remoteEvent and remoteEvent:IsA("RemoteEvent") then
                 -- Ensure we are sending a table that ClientState expects
                 if type(state) == "table" then
+                    -- 🔧 WRAP IN PAYLOAD: RemoteClient expects {eventName, args} OR direct state
+                    -- but RemoteServer:FireClient wraps it in {eventName, args}.
+                    -- Since we are firing the RemoteEvent DIRECTLY here, we must follow the contract.
+                    -- ClientState.luau expects the DIRECT state table if eventName is missing.
                     remoteEvent:FireClient(player, state)
                     Log(string.format("✅ State successfully sent to %s via ClientStateChannel", player.Name))
                 else

@@ -33,7 +33,12 @@ return {
         Shop_BACKGROUND ="rbxassetid://102151919452993",
         Pointer_ico = "rbxassetid://120202628835237",
         Gacha_Glow = "rbxassetid://6014264734",
-        
+        Del_ico = "rbxassetid://119915056737118",
+        Move_ico = "rbxassetid://77744554248158",
+        Rotate_ico = "rbxassetid://119430934163312",
+        Pet_ico = "rbxassetid://87317325041654",
+        Decoration_ico = "rbxassetid://105940117361584",
+        Confirm_ico = "rbxassetid://140107141846094",
         -- Gameplay & Items
 		Coin_ico = "rbxassetid://120673611252447",
         Coin1_ico = "rbxassetid://92342444032080",
@@ -83,5 +88,25 @@ return {
         Crab = "M_Pet/Crab",
         Jellyfish = "M_Pet/Jellyfish",
         Snail1 = "M_Pet/Snail1",
+
+        -- Decoration
+        Coral1 = "M_Decoration/Coral1",
+        Coral2 = "M_Decoration/Coral2",
+        Coral3 = "M_Decoration/Coral3",
+        Coral4 = "M_Decoration/Coral4",
+        Coral5 = "M_Decoration/Coral5",
+        Coral6 = "M_Decoration/Coral6",
+        Coral7 = "M_Decoration/Coral7",
+        Coral8 = "M_Decoration/Coral8",
+        Coral9 = "M_Decoration/Coral9",
+        Coral10 = "M_Decoration/Coral10",
+        Coral11 = "M_Decoration/Coral11",
+        Coral12 = "M_Decoration/Coral12",
+        Coral13 = "M_Decoration/Coral13",
+        Coral14 = "M_Decoration/Coral14",
+        Coral15 = "M_Decoration/Coral15",
+        Coral16 = "M_Decoration/Coral16",
+
+        
     }
 }

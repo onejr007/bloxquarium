@@ -38,9 +38,11 @@ local function getDefaultPlayerData()
             Fish = {},
             Food = {},
             Egg = {},
+            Decoration = {},
             Mutation = {}
         },
         AquariumFish = {}, -- Fish currently living in the aquarium
+        PlacedDecorations = {}, -- Decorations currently placed in the aquarium
         AquariumLevel = 1,
         LastSave = os.time()
     }

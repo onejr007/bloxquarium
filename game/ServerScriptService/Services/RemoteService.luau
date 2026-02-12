@@ -7,6 +7,8 @@
 ]]
 
 local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SHARED = ReplicatedStorage:WaitForChild("Shared")
 
 -- Core Dependencies
 local Remote = require(ServerScriptService:WaitForChild("RemoteServer"))
@@ -116,7 +118,7 @@ function RemoteService:Init(DataService)
 
         -- Load configs on-demand and cache them
         if not cachedAssetConfig then
-            cachedAssetConfig = require(ServerScriptService:WaitForChild("asset_config"))
+            cachedAssetConfig = require(SHARED:WaitForChild("asset_config"))
         end
         if not cachedLoadingConfig then
             cachedLoadingConfig = require(ServerScriptService:WaitForChild("loading_config"))

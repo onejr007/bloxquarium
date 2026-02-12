@@ -3,7 +3,80 @@
     9002653829
   ],
   "game": {
+    "aquarium": [
+      null,
+      {
+        "maxDecoration": 3,
+        "maxFish": 10,
+        "maxTotem": 3
+      },
+      {
+        "maxDecoration": 5,
+        "maxFish": 15,
+        "maxTotem": 3
+      },
+      {
+        "maxDecoration": 10,
+        "maxFish": 20,
+        "maxTotem": 3
+      }
+    ],
     "chance": {
+      "id_decor_1": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_10": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_11": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_2": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_3": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_4": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_5": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_6": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_7": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_8": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
+      "id_decor_9": {
+        "chance": 100,
+        "stockMax": 999999,
+        "stockMin": 99999
+      },
       "id_egg_1770632986": {
         "chance": 100,
         "stockMax": 9999,
@@ -41,38 +114,47 @@
       }
     },
     "shop": {
-      "end": "2026-02-12T11:45:50Z",
+      "end": "2026-02-12T20:05:02Z",
       "item": {
-        "id_egg_1770632986": 5677,
-        "id_egg_1770633097": 378,
-        "id_egg_1770633225": 61,
-        "id_food_1770633722": 552134,
-        "id_food_1770633895": 807936,
-        "id_food_1770633942": 543484
+        "id_decor_1": 898099,
+        "id_decor_10": 702032,
+        "id_decor_11": 583377,
+        "id_decor_2": 314140,
+        "id_decor_3": 742891,
+        "id_decor_4": 260181,
+        "id_decor_5": 311115,
+        "id_decor_6": 792421,
+        "id_decor_7": 407234,
+        "id_decor_8": 165206,
+        "id_decor_9": 270353,
+        "id_egg_1770632986": 1048,
+        "id_egg_1770633097": 535,
+        "id_egg_1770633225": 76,
+        "id_food_1770633722": 172170,
+        "id_food_1770633895": 314816,
+        "id_food_1770633942": 437924
       },
-      "start": "2026-02-12T11:35:50Z"
-    },
-    "aquarium":{
-      "1": {
-        "maxFish": 10,
-        "maxDecoration": 3,
-        "maxTotem": 3
-      },
-      "2": {
-        "maxFish": 15,
-        "maxDecoration": 5,
-        "maxTotem": 3
-      },
-      "3": {
-        "maxFish": 20,
-        "maxDecoration": 10,
-        "maxTotem": 3
-      }
+      "start": "2026-02-12T19:55:02Z"
     }
   },
   "items": {
     "Egg": {
       "id_egg_1770632986": {
+        "eggReward": [
+          null,
+          {
+            "chance": 80,
+            "fishId": "id_fish_1770634168"
+          },
+          {
+            "chance": 15,
+            "fishId": "id_fish_1770634169"
+          },
+          {
+            "chance": 5,
+            "fishId": "id_fish_1770634170"
+          }
+        ],
         "mDropName": "Biasa",
         "mDropRotate": "0,0,0",
         "mDropScale": 1,
@@ -81,23 +163,20 @@
         "mInfoScale": 1,
         "name": "Telur Biasa",
         "price": 500,
-        "rarity": "common",
-        "eggReward": {
-          "1":{
-            "fishId": "id_fish_1770634168",
-            "chance": 80
-          },
-          "2":{
-            "fishId": "id_fish_1770634169",
-            "chance": 15
-          },
-          "3":{
-            "fishId": "id_fish_1770634170",
-            "chance": 5
-          }
-        }
+        "rarity": "common"
       },
       "id_egg_1770633097": {
+        "eggReward": [
+          null,
+          {
+            "chance": 80,
+            "fishId": "id_fish_1770634168"
+          },
+          {
+            "chance": 20,
+            "fishId": "id_fish_1770634169"
+          }
+        ],
         "mDropName": "Langka",
         "mDropRotate": "0,0,0",
         "mDropScale": 1,
@@ -106,19 +185,20 @@
         "mInfoScale": 1,
         "name": "Telur Langka",
         "price": 500,
-        "rarity": "common",
-        "eggReward": {
-          "1":{
-            "fishId": "id_fish_1770634168",
-            "chance": 80
-          },
-          "2":{
-            "fishId": "id_fish_1770634169",
-            "chance": 20
-          }
-        }
+        "rarity": "common"
       },
       "id_egg_1770633225": {
+        "eggReward": [
+          null,
+          {
+            "chance": 80,
+            "fishId": "id_fish_1770634168"
+          },
+          {
+            "chance": 20,
+            "fishId": "id_fish_1770634169"
+          }
+        ],
         "mDropName": "Epik",
         "mDropRotate": "0,0,0",
         "mDropScale": 1,
@@ -127,17 +207,7 @@
         "mInfoScale": 1,
         "name": "Telur Epik",
         "price": 500,
-        "rarity": "common",
-        "eggReward": {
-          "1":{
-            "fishId": "id_fish_1770634168",
-            "chance": 80
-          },
-          "2":{
-            "fishId": "id_fish_1770634169",
-            "chance": 20
-          }
-        }
+        "rarity": "common"
       }
     },
     "Fish": {
@@ -309,93 +379,133 @@
         "name": "Shiny"
       }
     },
-    "decoration":{
-      "1":{
+    "decoration": {
+      "id_decor_1": {
+        "category": "Coral",
+        "effect": {
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral1",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Coral1",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Coral 1",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_10": {
+        "category": "Flower",
+        "effect": {
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
+        "mDropName": "Flower3",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 0.15,
+        "mInfoName": "Flower3",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Flower 3",
+        "price": 500,
+        "rarity": "common"
+      },
+      "id_decor_11": {
+        "category": "Tree",
+        "effect": {
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
+        "mDropName": "Tree1",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 0.4,
+        "mInfoName": "Tree1",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Tree 1",
+        "price": 500,
+        "rarity": "common"
+      },
+      "id_decor_2": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "2":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral2",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Coral2",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Coral 2",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_3": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "3":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral3",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Coral3",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Coral 3",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_4": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "4":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral4",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Coral4",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Coral 4",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_5": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "5":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral5",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Coral5",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Coral 5",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_6": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "6":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral6",
         "mDropRotate": "0,0,0",
         "mDropScale": 1,
@@ -404,15 +514,15 @@
         "mInfoScale": 1,
         "name": "Coral 6",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_7": {
         "category": "Coral",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "7":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Coral7",
         "mDropRotate": "0,0,0",
         "mDropScale": 1,
@@ -421,90 +531,59 @@
         "mInfoScale": 1,
         "name": "Coral 7",
         "price": 500,
-        "rarity": "common",
-        "category": "Coral",
-        "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
+        "rarity": "common"
       },
-      "8":{
+      "id_decor_8": {
+        "category": "Flower",
+        "effect": {
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Flower1",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Flower1",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Flower 1",
         "price": 500,
-        "rarity": "common",
+        "rarity": "common"
+      },
+      "id_decor_9": {
         "category": "Flower",
         "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "9":{
+          "addCoinCD": 1,
+          "addHungerCD": 1,
+          "coinMultipler": 1.1
+        },
         "mDropName": "Flower2",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.4,
         "mInfoName": "Flower2",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
         "name": "Flower 2",
         "price": 500,
-        "rarity": "common",
-        "category": "Flower",
-        "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "10":{
-        "mDropName": "Flower3",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
-        "mInfoName": "Flower3",
-        "mInfoRotate": "0,0,0",
-        "mInfoScale": 1,
-        "name": "Flower 3",
-        "price": 500,
-        "rarity": "common",
-        "category": "Flower",
-        "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
-      },
-      "11":{
-        "mDropName": "Tree1",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
-        "mInfoName": "Tree1",
-        "mInfoRotate": "0,0,0",
-        "mInfoScale": 1,
-        "name": "Tree 1",
-        "price": 500,
-        "rarity": "common",
-        "category": "Tree",
-        "effect": {
-          "coinMultipler": 1.1,
-          "addCoinCD":1,
-          "addHungerCD": 1
-        }
+        "rarity": "common"
       }
     }
   },
   "players": {
     "9002653829": {
       "AquariumLevel": 3,
-      "Coins": 40464,
+      "Coins": 35964,
       "Gems": 0,
       "Inventory": {
+        "Decoration": {
+          "id_decor_10": 1,
+          "id_decor_2": 1,
+          "id_decor_3": 1,
+          "id_decor_6": 1,
+          "id_decor_7": 1,
+          "id_decor_8": 1,
+          "id_decor_9": 1
+        },
         "Egg": {
           "id_egg_1770632986": 7,
           "id_egg_1770633097": 9,
@@ -514,8 +593,44 @@
           "id_food_1770633722": 113
         }
       },
-      "LastSave": 1770896613,
+      "LastSave": 1770926645,
       "Level": 5,
+      "PlacedDecorations": [
+        {
+          "cframe": [
+            4996.95166015625,
+            -100,
+            5000,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "itemId": "id_decor_11"
+        },
+        {
+          "cframe": [
+            4999.279296875,
+            -100,
+            5000,
+            1,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1
+          ],
+          "itemId": "id_decor_4"
+        }
+      ],
       "XP": 0
     }
   }

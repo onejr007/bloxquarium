@@ -14,6 +14,7 @@ local ClientState = require(ReplicatedStorage.Shared.ClientState)
 local Assets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("AssetManagerV3"))
 local MainHUD = require(script.Parent:WaitForChild("MainHUDController"))
 local GachaController = require(script.Parent:WaitForChild("GachaController"))
+local DecorationController = require(script.Parent:WaitForChild("DecorationController"))
 local ViewportManager = require(ReplicatedStorage.Shared:WaitForChild("ViewportManager"))
 
 --------------------------------------------------
@@ -47,12 +48,13 @@ local isMinimized = false
 local infoRotationConn: RBXScriptConnection? = nil
 local currentSelectedId: string? = nil
 local currentSelectedCategory: string? = nil
+local activeUwGui: ScreenGui? = nil
 local hideItemInfo: () -> () -- Forward declaration for scope access
 
 --------------------------------------------------
 -- ASSETS & THEME
 --------------------------------------------------
-local FRAME_ICO, MENU_ICO, FISH_ICO, CLOSE_ICO, COIN_ICO, EGG_ICO, FOOD_ICO
+local FRAME_ICO, MENU_ICO, FISH_ICO, CLOSE_ICO, COIN_ICO, EGG_ICO, FOOD_ICO, DECOR_ICO
 
 local THEME = {
 	PRIMARY = Color3.fromRGB(16, 22, 36),
@@ -77,6 +79,7 @@ local function loadAssets()
 	COIN_ICO = Assets.get("Coin_ico") or ""
 	EGG_ICO = Assets.get("Egg_ico") or ""
 	FOOD_ICO = Assets.get("Food_ico") or ""
+	DECOR_ICO = Assets.get("Decoration_ico") or ""
 	log("Assets loaded")
 end
 
@@ -105,6 +108,18 @@ local function parseRotation(rot: any): CFrame
 		return CFrame.Angles(0, math.rad(rot), 0)
 	end
 	return CFrame.new()
+end
+
+local function applyDecor(inst: GuiObject, radius: number?, color: Color3?)
+	if not inst then return end
+	local corner = inst:FindFirstChildWhichIsA("UICorner") or Instance.new("UICorner", inst)
+	corner.CornerRadius = UDim.new(0, radius or 8)
+
+	local stroke = inst:FindFirstChildWhichIsA("UIStroke") or Instance.new("UIStroke", inst)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Transparency = 0.6
+	stroke.Thickness = 1
+	stroke.Color = color or Color3.fromRGB(255, 255, 255)
 end
 
 --------------------------------------------------
@@ -189,24 +204,6 @@ local function GenerateUnderwaterAreaLocal()
 		bounds.CanCollide = false
 		bounds.Parent = container
 	end
-	
-	-- Lighting
-	if not container:FindFirstChild("LightSource") then
-		local lightPart = Instance.new("Part")
-		lightPart.Name = "LightSource"
-		lightPart.Size = Vector3.new(1, 1, 1)
-		lightPart.Position = UNDERWATER_POS + Vector3.new(0, boxSize.Y - 2, 0)
-		lightPart.Anchored = true
-		lightPart.Transparency = 1
-		lightPart.CanCollide = false
-		lightPart.Parent = container
-
-		local light = Instance.new("PointLight")
-		light.Range = 100
-		light.Brightness = 3
-		light.Color = Color3.fromRGB(100, 200, 255)
-		light.Parent = lightPart
-	end
 end
 
 --------------------------------------------------
@@ -238,6 +235,7 @@ local function createUnderwaterGui(onClose: () -> ())
 
 	log("Mounting Underwater GUI")
 
+	local destroyed = false
 	local sg = Instance.new("ScreenGui")
 	sg.Name, sg.ResetOnSpawn = "UnderwaterGui", false
 	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
@@ -246,6 +244,7 @@ local function createUnderwaterGui(onClose: () -> ())
 	-- MENU CONTAINER (BOTTOM RIGHT)
 	--------------------------------------------------
 	local menuContainer = Instance.new("Frame", sg)
+	menuContainer.Name = "MenuButtons"
 	menuContainer.Size = UDim2.fromScale(0.14, 0.42)
 	menuContainer.Position = UDim2.fromScale(1, 1)
 	menuContainer.AnchorPoint = Vector2.new(1, 1)
@@ -596,15 +595,17 @@ local function createUnderwaterGui(onClose: () -> ())
 	local fishBtn = createIconButton(FISH_ICO, UDim2.new(0.5, 0, 1, -36), 52, "Fish")
 	local eggBtn = createIconButton(EGG_ICO, UDim2.new(0.5, 0, 1, -36), 52, "Egg")
 	local foodBtn = createIconButton(FOOD_ICO, UDim2.new(0.5, 0, 1, -36), 52, "Food")
+	local decorBtn = createIconButton(DECOR_ICO, UDim2.new(0.5, 0, 1, -36), 52, "Decoration")
 	local closeBtn = createIconButton(CLOSE_ICO, UDim2.new(0.5, 0, 1, -36), 52, "Close", THEME.DANGER)
 
-	fishBtn.Visible, eggBtn.Visible, foodBtn.Visible, closeBtn.Visible = false, false, false, false
-	fishBtn.Parent, eggBtn.Parent, foodBtn.Parent, closeBtn.Parent = menuContainer, menuContainer, menuContainer, menuContainer
+	fishBtn.Visible, eggBtn.Visible, foodBtn.Visible, decorBtn.Visible, closeBtn.Visible = false, false, false, false, false
+	fishBtn.Parent, eggBtn.Parent, foodBtn.Parent, decorBtn.Parent, closeBtn.Parent = menuContainer, menuContainer, menuContainer, menuContainer, menuContainer
 
 	--------------------------------------------------
 	-- COIN DISPLAY (AUTO FIT CONTENT + TEXT WIDTH)
 	--------------------------------------------------
 	local coinFrame = Instance.new("Frame", sg)
+	coinFrame.Name = "CoinFrame"
 	coinFrame.Size = UDim2.fromOffset(120, 44)
 	coinFrame.AutomaticSize = Enum.AutomaticSize.X
 	coinFrame.Position = UDim2.fromScale(0.035, 0.965)
@@ -641,6 +642,139 @@ local function createUnderwaterGui(onClose: () -> ())
 	coinLabel.TextXAlignment = Enum.TextXAlignment.Left
 	coinLabel.TextColor3 = THEME.TEXT
 	coinLabel.Text = "0"
+
+	--------------------------------------------------
+	-- CAPACITY DISPLAY (FISH & DECOR)
+	--------------------------------------------------
+	local capacityFrame = Instance.new("Frame", sg)
+	capacityFrame.Name = "CapacityFrame"
+	capacityFrame.Size = UDim2.fromOffset(100, 44)
+	capacityFrame.AutomaticSize = Enum.AutomaticSize.X
+	capacityFrame.Position = UDim2.new(0.035, 0, 0.965, -52)
+	capacityFrame.AnchorPoint = Vector2.new(0,1)
+	capacityFrame.BackgroundColor3 = THEME.PRIMARY
+	capacityFrame.BackgroundTransparency = 0.3
+	Instance.new("UICorner", capacityFrame).CornerRadius = UDim.new(0, 12)
+	applyDecor(capacityFrame, 4, THEME.ACCENT)
+
+	local capLayout = Instance.new("UIListLayout", capacityFrame)
+	capLayout.FillDirection = Enum.FillDirection.Horizontal
+	capLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	capLayout.Padding = UDim.new(0, 12)
+	
+	local capPadding = Instance.new("UIPadding", capacityFrame)
+	capPadding.PaddingLeft = UDim.new(0, 10)
+	capPadding.PaddingRight = UDim.new(0, 10)
+
+	-- Fish Capacity
+	local fishCapFrame = Instance.new("Frame", capacityFrame)
+	fishCapFrame.Size = UDim2.fromOffset(0, 30)
+	fishCapFrame.AutomaticSize = Enum.AutomaticSize.X
+	fishCapFrame.BackgroundTransparency = 1
+	
+	local fishCapLayout = Instance.new("UIListLayout", fishCapFrame)
+	fishCapLayout.FillDirection = Enum.FillDirection.Horizontal
+	fishCapLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	fishCapLayout.Padding = UDim.new(0, 4)
+
+	local fishCapIcon = Instance.new("ImageLabel", fishCapFrame)
+	fishCapIcon.Size = UDim2.fromOffset(20, 20)
+	fishCapIcon.BackgroundTransparency = 1
+	fishCapIcon.Image = FISH_ICO
+	fishCapIcon.ImageColor3 = THEME.ACCENT
+
+	local fishCapLabel = Instance.new("TextLabel", fishCapFrame)
+	fishCapLabel.Size = UDim2.fromScale(0, 1)
+	fishCapLabel.AutomaticSize = Enum.AutomaticSize.X
+	fishCapLabel.BackgroundTransparency = 1
+	fishCapLabel.Font = Enum.Font.GothamBold
+	fishCapLabel.TextSize = 14
+	fishCapLabel.TextColor3 = THEME.TEXT
+	fishCapLabel.Text = "0/0"
+
+	-- Decor Capacity
+	local decorCapFrame = Instance.new("Frame", capacityFrame)
+	decorCapFrame.Size = UDim2.fromOffset(0, 30)
+	decorCapFrame.AutomaticSize = Enum.AutomaticSize.X
+	decorCapFrame.BackgroundTransparency = 1
+	
+	local decorCapLayout = Instance.new("UIListLayout", decorCapFrame)
+	decorCapLayout.FillDirection = Enum.FillDirection.Horizontal
+	decorCapLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	decorCapLayout.Padding = UDim.new(0, 4)
+
+	local decorCapIcon = Instance.new("ImageLabel", decorCapFrame)
+	decorCapIcon.Size = UDim2.fromOffset(20, 20)
+	decorCapIcon.BackgroundTransparency = 1
+	decorCapIcon.Image = DECOR_ICO
+	decorCapIcon.ImageColor3 = THEME.GOLD
+
+	local decorCapLabel = Instance.new("TextLabel", decorCapFrame)
+	decorCapLabel.Size = UDim2.fromScale(0, 1)
+	decorCapLabel.AutomaticSize = Enum.AutomaticSize.X
+	decorCapLabel.BackgroundTransparency = 1
+	decorCapLabel.Font = Enum.Font.GothamBold
+	decorCapLabel.TextSize = 14
+	decorCapLabel.TextColor3 = THEME.TEXT
+	decorCapLabel.Text = "0/0"
+
+	local function updateCapacity(state)
+		state = state or ClientState:GetState()
+		if not state then return end
+		
+		-- 🔍 GET FISH COUNT (From World)
+		local fishCount = 0
+		local world = workspace:FindFirstChild("UnderwaterWorld")
+		local fishFolder = world and world:FindFirstChild("Fish")
+		if fishFolder then
+			for _, f in ipairs(fishFolder:GetChildren()) do
+				if f:IsA("Model") and f:GetAttribute("OwnerId") == Player.UserId then
+					fishCount += 1
+				end
+			end
+		end
+
+		-- 🔍 GET DECOR COUNT (From World)
+		local decorCount = 0
+		local decorFolder = world and world:FindFirstChild("Decorations")
+		if decorFolder then
+			for _, d in ipairs(decorFolder:GetChildren()) do
+				if d:IsA("Model") and d:GetAttribute("OwnerId") == Player.UserId then
+					decorCount += 1
+				end
+			end
+		end
+
+		-- 🔍 GET MAX LIMITS (From Firebase Data Structure)
+		-- Based on database_structure.json: game.aquarium[level].maxDecoration / maxFish
+		local aqLevel = state.AquariumLevel or 1
+		local maxFish = 10 -- Default
+		local maxDecor = 3 -- Default
+
+		-- Mapping from database_structure.json
+		local aqConfig = {
+			[1] = {maxDecoration = 3, maxFish = 10},
+			[2] = {maxDecoration = 5, maxFish = 15},
+			[3] = {maxDecoration = 10, maxFish = 20},
+		}
+		
+		local currentLimit = aqConfig[aqLevel] or aqConfig[1]
+		maxFish = currentLimit.maxFish
+		maxDecor = currentLimit.maxDecoration
+
+		fishCapLabel.Text = string.format("%d/%d", fishCount, maxFish)
+		decorCapLabel.Text = string.format("%d/%d", decorCount, maxDecor)
+	end
+
+	updateCapacity()
+	ClientState:OnChange(updateCapacity)
+
+	-- Also update when fish or decorations are added/removed locally
+	task.spawn(function()
+		while task.wait(1) do
+			if not destroyed then updateCapacity() end
+		end
+	end)
 
 	hideItemInfo = function()
 		if not infoFrame or not infoFrame.Visible then return end
@@ -1188,6 +1322,7 @@ local function createUnderwaterGui(onClose: () -> ())
 		currentMenu = nil
 		hideEmpty()
 		hideItemInfo()
+		DecorationController:CloseUI()
 		menuFrame.Visible = false
 		menuFrame.GroupTransparency = 1
 		clearInventory()
@@ -1238,6 +1373,7 @@ local function createUnderwaterGui(onClose: () -> ())
 	local function toggleSubMenu(category: string, btn: GuiObject)
 		if destroyed then return end
 		hideItemInfo()
+		DecorationController:CloseUI()
 		if currentMenu == category then
 			closeInventoryFrame()
 		else
@@ -1264,13 +1400,17 @@ local function createUnderwaterGui(onClose: () -> ())
 		if isOpen then
 			PlotController:StopFoodDropMode()
 			forceCloseInventory()
+		else
+			DecorationController:CloseUI()
+			DecorationController:CancelPlacement()
 		end
 
 		local targets = {
 			{btn = fishBtn, pos = -120},
 			{btn = eggBtn, pos = -185},
 			{btn = foodBtn, pos = -250},
-			{btn = closeBtn, pos = -315},
+			{btn = decorBtn, pos = -315},
+			{btn = closeBtn, pos = -380},
 		}
 
 		for i, data in ipairs(targets) do
@@ -1300,6 +1440,14 @@ local function createUnderwaterGui(onClose: () -> ())
 	fishBtn.MouseButton1Click:Connect(function() toggleSubMenu("Fish", fishBtn) end)
 	eggBtn.MouseButton1Click:Connect(function() toggleSubMenu("Egg", eggBtn) end)
 	foodBtn.MouseButton1Click:Connect(function() toggleSubMenu("Food", foodBtn) end)
+	decorBtn.MouseButton1Click:Connect(function()
+		if DecorationController:IsOpen() then
+			DecorationController:CloseUI()
+		else
+			forceCloseInventory()
+			DecorationController:OpenUI()
+		end
+	end)
 
 	--------------------------------------------------
 	-- CLOSE BUTTON (FULL CLEANUP)
@@ -1309,6 +1457,7 @@ local function createUnderwaterGui(onClose: () -> ())
 		destroyed = true
 		log("Close pressed — full UI cleanup")
 		forceCloseInventory()
+		DecorationController:CloseUI() -- Ensure decoration UI and selection modes are cleaned up
 		sg:Destroy()
 		onClose()
 	end)
@@ -1876,15 +2025,20 @@ function PlotController:StartEnterSequence(owner: Player, plotModel: Model)
 		UNDERWATER_POS + Vector3.new(0, -7, 0)
 	)
 
-	local uwGui
-	uwGui = createUnderwaterGui(function()
+	activeUwGui = createUnderwaterGui(function()
 		log("Underwater onClose")
-		self:StartExitSequence(plotModel, loadingSg, uwGui)
+		self:StartExitSequence(plotModel, loadingSg, activeUwGui)
 	end)
 
 	task.wait(0.5)
 	TweenService:Create(loadingFrame, TweenInfo.new(0.8), {BackgroundTransparency = 1}):Play()
 	TweenService:Create(loadingText, TweenInfo.new(0.8), {TextTransparency = 1}):Play()
+end
+
+function PlotController:ToggleUI(visible: boolean)
+	if activeUwGui then
+		activeUwGui.Enabled = visible
+	end
 end
 
 --------------------------------------------------
@@ -1901,8 +2055,9 @@ function PlotController:StartExitSequence(plotModel: Model, loadingSg: ScreenGui
 	TweenService:Create(text, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
 	task.wait(0.6)
 
-	if uwGui then
-		uwGui:Destroy()
+	if activeUwGui then
+		activeUwGui:Destroy()
+		activeUwGui = nil
 		log("Underwater GUI destroyed")
 	end
 

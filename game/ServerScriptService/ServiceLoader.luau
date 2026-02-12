@@ -15,6 +15,7 @@ local INIT_ORDER = {
     "DatabaseService",
     "DataService",
     "RemoteService",
+    "InventoryService",
     "ShopService",
     "AdminService",
     "PlotService",
@@ -65,6 +66,8 @@ function ServiceLoader:Init()
                 args = {services["DataService"], services["RemoteService"]}
             elseif serviceName == "RemoteService" then
                 args = {services["DataService"]}
+            elseif serviceName == "InventoryService" then
+                args = {services["DataService"], services["RemoteService"], services["UnderwaterService"]}
             elseif serviceName == "LeaderboardService" then
                 args = {services["DataService"]}
             end

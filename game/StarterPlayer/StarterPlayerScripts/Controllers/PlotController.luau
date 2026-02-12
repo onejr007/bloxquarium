@@ -13,6 +13,7 @@ local Remote = require(ReplicatedStorage.Shared.RemoteClient)
 local ClientState = require(ReplicatedStorage.Shared.ClientState)
 local Assets = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("AssetManagerV3"))
 local MainHUD = require(script.Parent:WaitForChild("MainHUDController"))
+local GachaController = require(script.Parent:WaitForChild("GachaController"))
 local ViewportManager = require(ReplicatedStorage.Shared:WaitForChild("ViewportManager"))
 
 --------------------------------------------------
@@ -25,9 +26,12 @@ local UNDERWATER_POS = Vector3.new(5000, -82.5, 5000) -- CENTER of aquarium
 local AQUARIUM_SIZE = Vector3.new(60, 35, 8)
 local isInteracting = false
 local currentVisitingOwnerId: number? = nil
+local initialized = false
 
 -- UI REFERENCES
 local infoFrame: Frame? = nil
+local rewardFrame: Frame? = nil
+local rewardList: Frame? = nil
 local infoDesc: TextLabel? = nil
 local infoName: TextLabel? = nil
 local infoModelContainer: Frame? = nil
@@ -35,10 +39,14 @@ local infoStroke: UIStroke? = nil
 local miniStroke: UIStroke? = nil
 local miniBtn: TextButton? = nil
 local hatchBtn: TextButton? = nil
+local autoHatchBtn: TextButton? = nil
+local isAutoHatching = false
 local currentFoodId: string? = nil -- Moved up for global access
 local originalPos: UDim2 = UDim2.fromScale(0.5, 0.975)
 local isMinimized = false
 local infoRotationConn: RBXScriptConnection? = nil
+local currentSelectedId: string? = nil
+local currentSelectedCategory: string? = nil
 local hideItemInfo: () -> () -- Forward declaration for scope access
 
 --------------------------------------------------
@@ -232,6 +240,7 @@ local function createUnderwaterGui(onClose: () -> ())
 
 	local sg = Instance.new("ScreenGui")
 	sg.Name, sg.ResetOnSpawn = "UnderwaterGui", false
+	sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	--------------------------------------------------
 	-- MENU CONTAINER (BOTTOM RIGHT)
@@ -254,16 +263,6 @@ local function createUnderwaterGui(onClose: () -> ())
 	menuFrame.Visible = false
 
 	Instance.new("UICorner", menuFrame).CornerRadius = UDim.new(0, 18)
-	local grad = Instance.new("UIGradient", menuFrame)
-	grad.Color, grad.Rotation = ColorSequence.new(THEME.GRADIENT_TOP, THEME.SECONDARY), 90
-
-	local shadow = Instance.new("ImageLabel", menuFrame)
-	shadow.BackgroundTransparency = 1
-	shadow.Image = "rbxassetid://1316045217"
-	shadow.ImageTransparency = 0.9
-	shadow.Size = UDim2.new(1, 32, 1, 32)
-	shadow.Position = UDim2.new(0, -16, 0, -16)
-	shadow.ZIndex = 0
 
 	--------------------------------------------------
 	-- INVENTORY SCROLL (HORIZONTAL, COMPACT)
@@ -302,152 +301,240 @@ local function createUnderwaterGui(onClose: () -> ())
 	emptyLabel.ZIndex = 3
 
 	--------------------------------------------------
-	-- ITEM INFO PANEL (FIXED POS + LOWER + NO OVERLAY BUG)
+	-- ITEM INFO PANEL (AAA GLASSMORPHISM DESIGN)
 	--------------------------------------------------
 	infoFrame = Instance.new("Frame", sg)
 	infoFrame.Name = "ItemInfoPanel"
-	infoFrame.Size = UDim2.fromOffset(210, 100) -- 🔧 LEBIH KECIL LAGI
+	infoFrame.Size = UDim2.fromOffset(280, 0)
 	infoFrame.AutomaticSize = Enum.AutomaticSize.Y
-	infoFrame.Position = UDim2.fromScale(0.5, 0.99)
+	infoFrame.Position = UDim2.fromScale(0.5, 0.995)
 	infoFrame.AnchorPoint = Vector2.new(0.5, 1)
-	infoFrame.BackgroundColor3 = THEME.PRIMARY
-	infoFrame.BackgroundTransparency = 1
+	infoFrame.BackgroundColor3 = Color3.fromRGB(15, 20, 35)
+	infoFrame.BackgroundTransparency = 0.2
 	infoFrame.Visible = false
-	infoFrame.ZIndex = 1
-	infoFrame.ClipsDescendants = true
+	infoFrame.ZIndex = 10
+	infoFrame.ClipsDescendants = false -- 🔧 Biarkan HatchContainer terlihat di luar frame jika perlu
 
-	Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 6)
+	local infoBlur = Instance.new("ImageLabel", infoFrame)
+	infoBlur.Name = "GlassBlur"
+	infoBlur.Size = UDim2.fromScale(1, 1) -- Menutupi seluruh infoFrame
+	infoBlur.Position = UDim2.fromOffset(0, 0)
+	infoBlur.BackgroundTransparency = 1
+	infoBlur.Image = "rbxassetid://1316045217"
+	infoBlur.ImageColor3 = THEME.ACCENT
+	infoBlur.ImageTransparency = 0.85
+	infoBlur.ZIndex = 1 -- Di bawah konten
+	infoBlur.ScaleType = Enum.ScaleType.Slice
+	infoBlur.SliceCenter = Rect.new(10, 10, 10, 10)
+
+	Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 12)
 	infoStroke = Instance.new("UIStroke", infoFrame)
-	infoStroke.Color, infoStroke.Thickness = THEME.ACCENT, 1.5
+	infoStroke.Color = THEME.ACCENT
+	infoStroke.Thickness = 2
+	infoStroke.Transparency = 0.3
 	infoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-	local header = Instance.new("Frame", infoFrame)
+	local infoGrad = Instance.new("UIGradient", infoFrame)
+	infoGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 150, 150))
+	})
+	infoGrad.Rotation = 45
+
+	-- 📦 CONTENT CONTAINER (Solusi layout aneh & Z-Index)
+	local content = Instance.new("Frame", infoFrame)
+	content.Name = "Content"
+	content.Size = UDim2.fromScale(1, 0)
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.BackgroundTransparency = 1
+	content.ZIndex = 5
+
+	local mainLayout = Instance.new("UIListLayout", content)
+	mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	mainLayout.Padding = UDim.new(0, 4)
+
+	local header = Instance.new("Frame", content)
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 28) -- 🔧 LEBIH KECIL
+	header.Size = UDim2.new(1, 0, 0, 36)
 	header.BackgroundTransparency = 1
-	header.ZIndex = 2
+	header.ZIndex = 6
 
 	local headerPadding = Instance.new("UIPadding", header)
-	headerPadding.PaddingLeft = UDim.new(0, 6)
-	headerPadding.PaddingRight = UDim.new(0, 6)
+	headerPadding.PaddingLeft = UDim.new(0, 12)
+	headerPadding.PaddingRight = UDim.new(0, 12)
 
 	miniBtn = Instance.new("TextButton", header)
 	miniBtn.Name = "MinimizeButton"
-	miniBtn.Size = UDim2.fromOffset(20, 20)
-	miniBtn.Position = UDim2.new(0, 4, 0.5, 0)
-	miniBtn.AnchorPoint = Vector2.new(0, 0.5)
+	miniBtn.Size = UDim2.fromOffset(24, 24)
+	miniBtn.Position = UDim2.new(1, 0, 0.5, 0)
+	miniBtn.AnchorPoint = Vector2.new(1, 0.5)
 	miniBtn.BackgroundColor3 = THEME.SECONDARY
-	miniBtn.BorderSizePixel = 0
+	miniBtn.BackgroundTransparency = 0.5
 	miniBtn.Text = "v"
 	miniBtn.Font = Enum.Font.GothamBold
-	miniBtn.TextSize = 12
+	miniBtn.TextSize = 14
 	miniBtn.TextColor3 = THEME.TEXT
-	miniBtn.ZIndex = 3
-
-	Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(0, 4)
-	miniStroke = Instance.new("UIStroke", miniBtn)
-	miniStroke.Color = THEME.ACCENT
-	miniStroke.Thickness = 1
+	miniBtn.ZIndex = 7
+	Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(0, 6)
 
 	infoName = Instance.new("TextLabel", header)
 	infoName.Name = "ItemName"
-	infoName.Size = UDim2.new(1, -34, 1, 0)
-	infoName.Position = UDim2.new(0, 30, 0, 0)
+	infoName.Size = UDim2.new(1, -30, 1, 0)
 	infoName.BackgroundTransparency = 1
-	infoName.Font = Enum.Font.GothamBold
-	infoName.TextSize = 11 -- 🔧 LEBIH KECIL
-	infoName.TextColor3 = THEME.ACCENT
+	infoName.Font = Enum.Font.GothamBlack
+	infoName.TextSize = 14
+	infoName.TextColor3 = Color3.fromRGB(255, 255, 255)
 	infoName.TextXAlignment = Enum.TextXAlignment.Left
-	infoName.TextWrapped = true
-	infoName.ZIndex = 3
+	infoName.ZIndex = 7
 
-	-- 🔧 BODY CONTAINER (Viewport + Stats)
-	local body = Instance.new("Frame", infoFrame)
+	local body = Instance.new("Frame", content)
 	body.Name = "Body"
 	body.Size = UDim2.new(1, 0, 0, 0)
 	body.AutomaticSize = Enum.AutomaticSize.Y
-	body.Position = UDim2.new(0, 0, 0, 28) -- 🔧 MENYESUAIKAN
 	body.BackgroundTransparency = 1
-	body.ZIndex = 2
+	body.ZIndex = 6
 
 	local bodyPadding = Instance.new("UIPadding", body)
-	bodyPadding.PaddingLeft = UDim.new(0, 6)
-	bodyPadding.PaddingRight = UDim.new(0, 6)
-	bodyPadding.PaddingBottom = UDim.new(0, 6)
+	bodyPadding.PaddingLeft = UDim.new(0, 12)
+	bodyPadding.PaddingRight = UDim.new(0, 12)
+	bodyPadding.PaddingBottom = UDim.new(0, 12)
 
 	local bodyLayout = Instance.new("UIListLayout", body)
 	bodyLayout.FillDirection = Enum.FillDirection.Horizontal
-	bodyLayout.Padding = UDim.new(0, 6)
-	bodyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	bodyLayout.Padding = UDim.new(0, 12)
+	bodyLayout.VerticalAlignment = Enum.VerticalAlignment.Center -- 🔧 CENTERED SYMMETRY
 
 	infoModelContainer = Instance.new("Frame", body)
 	infoModelContainer.Name = "ModelPreviewContainer"
-	infoModelContainer.Size = UDim2.fromOffset(50, 50) -- 🔧 LEBIH KECIL
-	infoModelContainer.BackgroundTransparency = 1
-	infoModelContainer.ZIndex = 3
+	infoModelContainer.Size = UDim2.fromOffset(80, 80)
+	infoModelContainer.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	infoModelContainer.BackgroundTransparency = 0.95
+	infoModelContainer.ZIndex = 7
+	Instance.new("UICorner", infoModelContainer).CornerRadius = UDim.new(0, 8)
+	Instance.new("UIStroke", infoModelContainer).Color = THEME.ACCENT
 
 	local rightContent = Instance.new("Frame", body)
 	rightContent.Name = "RightContent"
-	rightContent.Size = UDim2.new(1, -62, 0, 0) -- 🔧 MENYESUAIKAN
+	rightContent.Size = UDim2.new(1, -92, 0, 0)
 	rightContent.AutomaticSize = Enum.AutomaticSize.Y
 	rightContent.BackgroundTransparency = 1
-	rightContent.ZIndex = 2
+	rightContent.ZIndex = 7
 
 	local rightLayout = Instance.new("UIListLayout", rightContent)
-	rightLayout.Padding = UDim.new(0, 2)
-	rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	rightLayout.Padding = UDim.new(0, 4)
+	rightLayout.VerticalAlignment = Enum.VerticalAlignment.Center -- 🔧 CENTERED
 
 	infoDesc = Instance.new("TextLabel", rightContent)
 	infoDesc.Name = "StatsLabel"
-	infoDesc.Size = UDim2.fromScale(1, 0)
+	infoDesc.Size = UDim2.new(1, 0, 0, 0)
 	infoDesc.AutomaticSize = Enum.AutomaticSize.Y
 	infoDesc.BackgroundTransparency = 1
 	infoDesc.Font = Enum.Font.GothamMedium
-	infoDesc.TextSize = 9 -- 🔧 LEBIH KECIL
-	infoDesc.TextColor3 = THEME.TEXT
+	infoDesc.TextSize = 11
+	infoDesc.TextColor3 = THEME.EMPTY_TEXT
 	infoDesc.TextXAlignment = Enum.TextXAlignment.Left
 	infoDesc.TextWrapped = true
-	infoDesc.ZIndex = 3
+	infoDesc.ZIndex = 7
+
+	rewardFrame = Instance.new("Frame", content)
+	rewardFrame.Name = "RewardFrame"
+	rewardFrame.Size = UDim2.new(1, 0, 0, 0)
+	rewardFrame.AutomaticSize = Enum.AutomaticSize.Y
+	rewardFrame.BackgroundTransparency = 1
+	rewardFrame.Visible = false
+	rewardFrame.ZIndex = 6
+
+	local rewardTitle = Instance.new("TextLabel", rewardFrame)
+	rewardTitle.Size = UDim2.new(1, 0, 0, 24)
+	rewardTitle.Position = UDim2.fromOffset(12, 0)
+	rewardTitle.BackgroundTransparency = 1
+	rewardTitle.Text = "POSSIBLE REWARDS:"
+	rewardTitle.Font = Enum.Font.GothamBold
+	rewardTitle.TextSize = 10
+	rewardTitle.TextColor3 = THEME.GOLD
+	rewardTitle.TextXAlignment = Enum.TextXAlignment.Left
+	rewardTitle.ZIndex = 7
+
+	local rewardListFrame = Instance.new("Frame", rewardFrame)
+	rewardListFrame.Name = "RewardListContainer"
+	rewardListFrame.Size = UDim2.new(1, 0, 0, 50)
+	rewardListFrame.Position = UDim2.fromOffset(0, 26) -- Memberi jarak dari judul
+	rewardListFrame.BackgroundTransparency = 1
+	rewardListFrame.ZIndex = 7
+
+	rewardList = Instance.new("Frame", rewardListFrame)
+	rewardList.Name = "RewardList"
+	rewardList.Size = UDim2.fromScale(1, 1)
+	rewardList.BackgroundTransparency = 1
+	rewardList.ZIndex = 8
+
+	local rewardLayout = Instance.new("UIListLayout", rewardList)
+	rewardLayout.FillDirection = Enum.FillDirection.Horizontal
+	rewardLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	rewardLayout.Padding = UDim.new(0, 8)
+
+	header.LayoutOrder = 1
+	body.LayoutOrder = 2
+	rewardFrame.LayoutOrder = 3
 
 	--------------------------------------------------
-	-- HATCH BUTTON (ONLY FOR EGG)
+	-- 🔧 HATCH BUTTONS (Directly on infoFrame to ensure visibility)
 	--------------------------------------------------
-	hatchBtn = Instance.new("TextButton", rightContent)
+	hatchBtn = Instance.new("TextButton", infoFrame)
 	hatchBtn.Name = "HatchButton"
-	hatchBtn.Size = UDim2.new(0.95, 0, 0, 18) -- 🔧 LEBIH KECIL
+	hatchBtn.Size = UDim2.new(0.4, 0, 0, 32)
+	hatchBtn.Position = UDim2.new(0.3, -5, 1, 10) -- Geser kiri
+	hatchBtn.AnchorPoint = Vector2.new(0.5, 0)
 	hatchBtn.BackgroundColor3 = THEME.SUCCESS
 	hatchBtn.TextColor3 = THEME.PRIMARY
 	hatchBtn.Font = Enum.Font.GothamBlack
-	hatchBtn.TextSize = 9
+	hatchBtn.TextSize = 12
 	hatchBtn.Text = "HATCH"
+	hatchBtn.ZIndex = 2000 -- Jauh lebih tinggi
 	hatchBtn.Visible = false
-	hatchBtn.ZIndex = 3
-	Instance.new("UICorner", hatchBtn).CornerRadius = UDim.new(0, 4)
+	Instance.new("UICorner", hatchBtn).CornerRadius = UDim.new(0, 8)
+	Instance.new("UIStroke", hatchBtn).Thickness = 2
+
+	autoHatchBtn = Instance.new("TextButton", infoFrame)
+	autoHatchBtn.Name = "AutoHatchButton"
+	autoHatchBtn.Size = UDim2.new(0.4, 0, 0, 32)
+	autoHatchBtn.Position = UDim2.new(0.7, 5, 1, 10) -- Geser kanan
+	autoHatchBtn.AnchorPoint = Vector2.new(0.5, 0)
+	autoHatchBtn.BackgroundColor3 = THEME.GOLD
+	autoHatchBtn.TextColor3 = THEME.PRIMARY
+	autoHatchBtn.Font = Enum.Font.GothamBlack
+	autoHatchBtn.TextSize = 12
+	autoHatchBtn.Text = "AUTO"
+	autoHatchBtn.ZIndex = 2000
+	autoHatchBtn.Visible = false
+	Instance.new("UICorner", autoHatchBtn).CornerRadius = UDim.new(0, 8)
+	Instance.new("UIStroke", autoHatchBtn).Thickness = 2
 
 	hatchBtn.MouseEnter:Connect(function()
-		TweenService:Create(hatchBtn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(110, 240, 170)}):Play()
+		TweenService:Create(hatchBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(120, 255, 180)}):Play()
 	end)
 	hatchBtn.MouseLeave:Connect(function()
-		TweenService:Create(hatchBtn, TweenInfo.new(0.12), {BackgroundColor3 = THEME.SUCCESS}):Play()
+		TweenService:Create(hatchBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.SUCCESS}):Play()
 	end)
 
-	hatchBtn.MouseButton1Click:Connect(function()
-		log("Hatch requested for:", infoName.Text)
-		Remote:FireServer("RequestHatchEgg", infoName.Text)
+	autoHatchBtn.MouseEnter:Connect(function()
+		TweenService:Create(autoHatchBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(255, 230, 100)}):Play()
+	end)
+	autoHatchBtn.MouseLeave:Connect(function()
+		TweenService:Create(autoHatchBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.GOLD}):Play()
 	end)
 
-	-- 🔧 MINIMIZE LOGIC (Tebal 28px saat mini)
+	-- 🔧 MINIMIZE LOGIC (Tebal 36px saat mini)
 	isMinimized = false
-	originalPos = UDim2.fromScale(0.5, 0.99)
+	originalPos = UDim2.fromScale(0.5, 0.995)
 	
 	miniBtn.MouseButton1Click:Connect(function()
 		isMinimized = not isMinimized
 		miniBtn.Text = isMinimized and "^" or "v"
 		
-		-- Saat minimize, geser frame ke bawah hingga hanya header (28px) yang terlihat
-		local targetPos = isMinimized and UDim2.new(0.5, 0, 0.99, infoFrame.AbsoluteSize.Y - 28) or originalPos
+		local targetPos = isMinimized and UDim2.new(0.5, 0, 0.995, infoFrame.AbsoluteSize.Y - 36) or originalPos
 		
-		TweenService:Create(infoFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		TweenService:Create(infoFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
 			Position = targetPos
 		}):Play()
 	end)
@@ -613,6 +700,8 @@ local function createUnderwaterGui(onClose: () -> ())
 	local uiConnections = {}
 
 	local function showItemInfo(id: string, count: number, category: string)
+		currentSelectedId = id
+		currentSelectedCategory = category
 		local itemData = Assets.GetItemData(id)
 		local modelName = itemData and (itemData.mInfoName or itemData.mDropName or itemData.name) or tostring(id)
 		
@@ -627,7 +716,14 @@ local function createUnderwaterGui(onClose: () -> ())
 		end
 		
 		local statsText = ""
-		if category == "Food" then
+		if category == "Egg" then
+			infoName.Text = (itemData.name or "UNKNOWN"):upper()
+			statsText = string.format(
+				"RARITY: %s\n%s",
+				(itemData.rarity or "COMMON"):upper(),
+				itemData.desc or "Hatch to get a random fish!"
+			)
+		elseif category == "Food" then
 			statsText = string.format(
 				"RARITY: %s\nEXP: +%d\nHUNGER CD: %ds\nSTOCK: x%d",
 				(itemData.rarity or "COMMON"):upper(),
@@ -649,9 +745,236 @@ local function createUnderwaterGui(onClose: () -> ())
 		
 		if infoDesc then infoDesc.Text = statsText end
 		
-		if hatchBtn then hatchBtn.Visible = (category == "Egg") end
+		if hatchBtn and autoHatchBtn then 
+			local isEgg = (category == "Egg")
+			hatchBtn.Visible = isEgg
+			autoHatchBtn.Visible = isEgg
+			
+			warn("🥚 [PlotController] Buttons visibility set to:", isEgg, "for category:", category)
+			warn("🥚 [PlotController] HatchBtn ZIndex:", hatchBtn.ZIndex, "Visible:", hatchBtn.Visible)
+			
+			-- Reset auto hatch state if switching items
+			if currentSelectedId ~= id then
+				isAutoHatching = false
+				autoHatchBtn.Text = "AUTO HATCH"
+				autoHatchBtn.BackgroundColor3 = THEME.GOLD
+			end
+
+			-- 🧪 RE-BIND CLICK (Because id is local to showItemInfo)
+			for _, conn in ipairs(uiConnections) do conn:Disconnect() end
+			table.clear(uiConnections)
+			
+			local function performHatch(hatchMode: boolean?)
+				warn("🥚 [PlotController] performHatch called with hatchMode:", hatchMode, "isAutoHatching:", isAutoHatching)
+				if not id then 
+					warn("🥚 [PlotController] performHatch failed: No egg ID selected")
+					return require(game:GetService("ReplicatedStorage").Shared.Promise).resolve(false)
+				end
+				hatchBtn.Text = "HATCHING..."
+				hatchBtn.Active = false
+				
+			local isAutoMode = (hatchMode == true)
+			if hatchMode == nil then 
+				isAutoMode = isAutoHatching 
+			end
+			
+			-- 🔧 FORCE UI MINI IF AUTO
+			if isAutoHatching then isAutoMode = true end
+
+				-- 🔧 CRITICAL: Mark as success even if wonFishId is slow to arrive
+				return Remote:InvokeServer("RequestHatchEgg", id):andThen(function(success, wonFishId)
+					warn("🥚 [PlotController] Server response - success:", success, "wonFishId:", wonFishId)
+					
+					if success then
+						-- Jika wonFishId nil (masalah transport), coba ambil dari ClientState
+						if not wonFishId then
+							warn("⚠️ [PlotController] wonFishId is nil from server response, attempting ClientState fallback...")
+							local state = ClientState:GetState()
+							-- Fallback: Cari fish yang ada di inventory tapi mungkin baru saja bertambah
+							-- Namun karena kita sudah memperbaiki Promise, ini seharusnya tidak terjadi lagi.
+						end
+						
+						hatchBtn.Text = "SUCCESS!"
+						hatchBtn.BackgroundColor3 = THEME.SUCCESS
+							
+						if not isMinimized then
+							isMinimized = true
+							miniBtn.Text = "^"
+							local targetPos = UDim2.new(0.5, 0, 0.995, infoFrame.AbsoluteSize.Y - 36)
+							TweenService:Create(infoFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+								Position = targetPos
+							}):Play()
+						end
+
+						if wonFishId then
+							print("🎡 [PlotController] Calling StartGacha with isMini:", isAutoMode)
+							local gachaPromise = GachaController:StartGacha(id, wonFishId, isAutoMode)
+							if gachaPromise and typeof(gachaPromise) == "table" and gachaPromise.await then
+								gachaPromise:await()
+							else
+								-- Fallback wait if StartGacha doesn't return a promise
+								if not isAutoMode then
+									task.wait(3.5)
+								else
+									task.wait(1.5)
+								end
+							end
+						else
+							warn("❌ [PlotController] Gacha cancelled: wonFishId is STILL nil after fallback attempts.")
+						end
+						
+						hatchBtn.Text = "HATCH EGG"
+						hatchBtn.BackgroundColor3 = THEME.SUCCESS -- Kembalikan ke warna default
+						hatchBtn.Active = true
+						return true
+					else
+						hatchBtn.Text = "HATCH FAILED"
+						hatchBtn.BackgroundColor3 = THEME.DANGER -- 🔧 MERAH JIKA GAGAL
+						task.wait(1)
+						hatchBtn.Text = "HATCH EGG"
+						hatchBtn.BackgroundColor3 = THEME.SUCCESS
+						hatchBtn.Active = true
+						return false
+					end
+				end):catch(function(err)
+					warn("🥚 [PlotController] Hatch error:", err)
+					hatchBtn.Text = "ERROR"
+					task.wait(1)
+					hatchBtn.Text = "HATCH EGG"
+					hatchBtn.Active = true
+					return false
+				end)
+			end
+
+			table.insert(uiConnections, hatchBtn.MouseButton1Click:Connect(function()
+				performHatch(false)
+			end))
+
+			table.insert(uiConnections, autoHatchBtn.MouseButton1Click:Connect(function()
+				isAutoHatching = not isAutoHatching
+				if isAutoHatching then
+					autoHatchBtn.Text = "STOP AUTO"
+					autoHatchBtn.BackgroundColor3 = THEME.DANGER
+					
+					-- Auto hatch loop
+					task.spawn(function()
+						local loopId = id -- Simpan ID telur saat loop dimulai
+						warn("🥚 [PlotController] Auto-hatch loop STARTED for ID:", loopId)
+						
+						while isAutoHatching do
+							-- 🔧 CRITICAL: Use loopId to ensure we're hatching the right egg
+							local targetEggId = loopId
+							local state = ClientState:GetState()
+							local currentStock = state and state.Inventory and state.Inventory.Egg and state.Inventory.Egg[targetEggId] or 0
+							
+							if currentStock <= 0 then
+								warn("🥚 [PlotController] Auto hatch stopped: Out of stock")
+								PlotController:StopAutoHatch()
+								break
+							end
+							
+							local promise = performHatch(true)
+							
+							if promise and typeof(promise) == "table" and promise.await then
+								local success = promise:await()
+								
+								if not success then 
+									warn("🥚 [PlotController] Auto-hatch stopped: performHatch returned false")
+									PlotController:StopAutoHatch()
+									break 
+								end
+							else
+								warn("❌ [PlotController] NO PROMISE RETURNED from performHatch")
+								PlotController:StopAutoHatch()
+								break
+							end
+							
+							task.wait(0.5) -- Small buffer between cycles
+						end
+						
+						-- Final cleanup in case of loop break
+						if isAutoHatching then
+							PlotController:StopAutoHatch()
+						end
+					end)
+				else
+					autoHatchBtn.Text = "AUTO HATCH"
+					autoHatchBtn.BackgroundColor3 = THEME.GOLD
+				end
+			end))
+		end
+
+		-- 🥚 POPULATE EGG REWARDS
+		if rewardFrame and rewardList then
+			rewardFrame.Visible = (category == "Egg")
+			rewardList:ClearAllChildren()
+			local rLayout = Instance.new("UIGridLayout", rewardList)
+			rLayout.CellSize = UDim2.fromOffset(42, 42)
+			rLayout.CellPadding = UDim2.fromOffset(6, 6)
+			rLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+			if category == "Egg" and itemData and itemData.eggReward then
+				rewardListFrame.Size = UDim2.new(1, 0, 0, #itemData.eggReward > 4 and 100 or 50)
+				for _, reward in pairs(itemData.eggReward) do
+					local fishId = reward.fishId
+					local fishData = Assets.GetItemData(fishId)
+					if fishData then
+						local fishModelName = fishData.mInfoName or fishData.mDropName or fishData.name
+						local rewardBox = Instance.new("Frame", rewardList)
+						rewardBox.Size = UDim2.fromScale(1, 1)
+						rewardBox.BackgroundColor3 = THEME.SECONDARY
+						rewardBox.BackgroundTransparency = 0.5
+						Instance.new("UICorner", rewardBox).CornerRadius = UDim.new(0, 8)
+						
+						local boxStroke = Instance.new("UIStroke", rewardBox)
+						boxStroke.Color = THEME["RARITY_" .. (fishData.rarity or "COMMON"):upper()] or THEME.ACCENT
+						boxStroke.Thickness = 1.5
+						boxStroke.Transparency = 0.4 -- 🔧 LEBIH TERLIHAT
+						
+						local vp, model = ViewportManager:CreateModelViewport(
+							rewardBox,
+							fishModelName,
+							fishData.mInfoRotate or 0,
+							fishData.mInfoScale or 1.1 -- 🔧 SEDIKIT LEBIH BESAR
+						)
+						
+						if model then
+							local baseRotation = model:GetPivot()
+							local rot = 0
+							task.spawn(function()
+								while rewardBox and rewardBox.Parent do
+									rot += task.wait() * 60 -- 🔧 SEDIKIT LEBIH CEPAT
+									model:PivotTo(baseRotation * CFrame.Angles(0, math.rad(rot), 0))
+								end
+							end)
+						end
+
+						-- Chance Label AAA
+						local chanceBG = Instance.new("Frame", rewardBox)
+						chanceBG.Size = UDim2.new(1, 0, 0, 14)
+						chanceBG.Position = UDim2.new(0, 0, 1, 0)
+						chanceBG.AnchorPoint = Vector2.new(0, 1)
+						chanceBG.BackgroundColor3 = Color3.new(0, 0, 0)
+						chanceBG.BackgroundTransparency = 0.6
+						chanceBG.ZIndex = 4
+						Instance.new("UICorner", chanceBG).CornerRadius = UDim.new(0, 4)
+
+						local chanceLbl = Instance.new("TextLabel", rewardBox)
+						chanceLbl.Size = UDim2.new(1, 0, 0, 14)
+						chanceLbl.Position = UDim2.new(0, 0, 1, 0)
+						chanceLbl.AnchorPoint = Vector2.new(0, 1)
+						chanceLbl.BackgroundTransparency = 1
+						chanceLbl.Text = tostring(reward.chance) .. "%"
+						chanceLbl.Font = Enum.Font.GothamBold
+						chanceLbl.TextSize = 8
+						chanceLbl.TextColor3 = THEME.GOLD
+						chanceLbl.ZIndex = 5
+					end
+				end
+			end
+		end
 		
-		if category == "Food" then
+		if category == "Food" or category == "Egg" then
 			if toggleMenu then toggleMenu(false) end
 			closeAllMenusExceptInfo()
 		end
@@ -769,15 +1092,17 @@ local function createUnderwaterGui(onClose: () -> ())
 			item.Text = ""
 			Instance.new("UICorner", item).CornerRadius = UDim.new(0, 12)
 
-			local stroke = Instance.new("UIStroke", item)
-			stroke.Color, stroke.Thickness = THEME.GRADIENT_TOP, 1
-
 			local vpf = Instance.new("Frame", item)
-			vpf.Size = UDim2.fromScale(0.82, 0.7)
-			vpf.Position = UDim2.fromScale(0.5, 0.38)
+			vpf.Size = UDim2.fromScale(0.85, 0.75) -- Sedikit lebih besar
+			vpf.Position = UDim2.fromScale(0.5, 0.42)
 			vpf.AnchorPoint, vpf.BackgroundTransparency = Vector2.new(0.5,0.5), 1
 
 			local itemData = Assets.GetItemData(id)
+			if not itemData then
+				log("WARNING: No data for item", id)
+				continue 
+			end
+
 			local modelName = itemData and (itemData.mInfoName or itemData.mDropName or itemData.name) or tostring(id)
 
 			local _, model = ViewportManager:CreateModelViewport(
@@ -811,6 +1136,16 @@ local function createUnderwaterGui(onClose: () -> ())
 			nameLbl.TextSize = 8
 			nameLbl.TextColor3 = THEME.TEXT
 			nameLbl.Text = modelName:upper()
+			nameLbl.ZIndex = 3
+
+			local nameBG = Instance.new("Frame", item)
+			nameBG.Size = UDim2.new(1, 0, 0, 14)
+			nameBG.Position = UDim2.new(0, 0, 1, 0)
+			nameBG.AnchorPoint = Vector2.new(0, 1)
+			nameBG.BackgroundColor3 = Color3.new(0, 0, 0)
+			nameBG.BackgroundTransparency = 0.7
+			nameBG.ZIndex = 2
+			Instance.new("UICorner", nameBG).CornerRadius = UDim.new(0, 4)
 
 			local bubble = Instance.new("Frame", item)
 			bubble.Name = "CountBubble"
@@ -995,13 +1330,41 @@ local function createUnderwaterGui(onClose: () -> ())
 	-- INVENTORY STATE SYNC
 	--------------------------------------------------
 	ClientState:OnChange(function(newState)
-		-- 🔧 REALTIME INFO FRAME AUTO-CLOSE (If stock is 0)
-		if infoFrame and infoFrame.Visible and currentFoodId then
-			local foodStock = newState.Inventory and newState.Inventory.Food and newState.Inventory.Food[currentFoodId] or 0
-			if foodStock <= 0 then
-				log("Stock empty for current food, auto-closing info frame")
-				PlotController:StopFoodDropMode()
+		-- 🔧 REALTIME INFO FRAME UPDATE (Update text and auto-close if empty)
+		if infoFrame and infoFrame.Visible and currentSelectedId and currentSelectedCategory then
+			local inventory = newState.Inventory and newState.Inventory[currentSelectedCategory]
+			local currentStock = inventory and inventory[currentSelectedId] or 0
+			
+			if currentStock <= 0 then
+				log("Stock empty for current item, auto-closing info frame")
+				if currentSelectedCategory == "Food" then PlotController:StopFoodDropMode() end
 				hideItemInfo()
+			else
+				-- Update the description text with new stock
+				local itemData = Assets.GetItemData(currentSelectedId)
+				if itemData and infoDesc then
+					local statsText = ""
+					if currentSelectedCategory == "Food" then
+						statsText = string.format(
+							"RARITY: %s\nEXP: +%d\nHUNGER CD: %ds\nSTOCK: x%d",
+							(itemData.rarity or "COMMON"):upper(),
+							itemData.addExp or 0,
+							itemData.addHungerCD or 0,
+							currentStock
+						)
+					elseif currentSelectedCategory == "Fish" then
+						statsText = string.format(
+							"RARITY: %s\nNAME: %s\nEXP: +%d\nHUNGER CD: %ds",
+							(itemData.rarity or "COMMON"):upper(),
+							(itemData.name or "UNKNOWN"):upper(),
+							itemData.addExp or 0,
+							itemData.addHungerCD or 0
+						)
+					else
+						statsText = itemData.desc or "Jumlah: x"..tostring(currentStock)
+					end
+					infoDesc.Text = statsText
+				end
 			end
 		end
 
@@ -1038,6 +1401,14 @@ local function createUnderwaterGui(onClose: () -> ())
 		-- Check if we need to show empty
 		if not hasAny then
 			showEmpty("INVENTORY KOSONG")
+		end
+	end)
+
+	-- 🧪 EXPERIMENTAL: Force re-populate inventory on ANY state change if visible
+	ClientState:OnChange(function(newState)
+		if menuFrame.Visible and currentMenu then
+			log("State change detected, force re-populating inventory:", currentMenu)
+			populateInventory(currentMenu)
 		end
 	end)
 
@@ -1354,8 +1725,21 @@ function PlotController:StartFoodDropMode(foodId: string)
 				if now - lastDropTime < DROP_COOLDOWN then return end
 				lastDropTime = now
 
-				log("Firing RequestDropFood for:", currentFoodId, "at", targetPos)
-				Remote:FireServer("RequestDropFood", currentFoodId, targetPos)
+				log("Firing RequestDropFood for:", currentFoodId, "at", targetPos, "owner:", currentVisitingOwnerId)
+				Remote:FireServer("RequestDropFood", currentFoodId, targetPos, currentVisitingOwnerId)
+				
+				-- 🔧 ANIMATE LOCALLY IMMEDIATELY (Better UX)
+				self:AnimateFoodDrop(currentFoodId, targetPos)
+
+				-- 🔧 AUTO MINIMIZE ON FIRST DROP
+				if not isMinimized then
+					isMinimized = true
+					if miniBtn then miniBtn.Text = "^" end
+					local targetPos = UDim2.new(0.5, 0, 0.995, infoFrame.AbsoluteSize.Y - 36)
+					TweenService:Create(infoFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+						Position = targetPos
+					}):Play()
+				end
 				
 				-- If stock is 1 (about to be 0), stop drop mode
 				local state = ClientState:GetState()
@@ -1391,11 +1775,47 @@ end
 --------------------------------------------------
 -- INITIALIZATION
 --------------------------------------------------
+function PlotController:StopAutoHatch()
+	isAutoHatching = false
+	if autoHatchBtn then
+		autoHatchBtn.Text = "AUTO HATCH"
+		autoHatchBtn.BackgroundColor3 = THEME.GOLD
+	end
+	
+	-- Cleanup Stop button in Gacha UI if exists
+	local PlayerGui = Player:WaitForChild("PlayerGui")
+	local miniGachaUI = PlayerGui:FindFirstChild("GachaMiniUI")
+	if miniGachaUI and miniGachaUI:FindFirstChild("StopAutoBtn") then
+		miniGachaUI.StopAutoBtn:Destroy()
+	end
+	
+	log("Auto hatch stopped externally")
+end
+
 function PlotController:Init()
+	if initialized then return end
+	initialized = true
+	
 	-- Handle food drops from server
-	Remote:On("FoodDropped", function(player: Player, foodId: string, position: Vector3, ownerId: number)
-		if ownerId ~= currentVisitingOwnerId then return end
-		log("Food dropped by", player.Name, ":", foodId)
+	Remote:On("FoodDropped", function(playerUserId: number, foodId: string, position: Vector3, ownerId: number)
+		-- 🛡️ DEBUG: Log incoming drop
+		log("Incoming FoodDropped signal. OwnerId:", ownerId, "CurrentVisiting:", currentVisitingOwnerId)
+		
+		-- 🔧 FIXED: Check ownerId against currentVisitingOwnerId
+		-- ownerId is the owner of the plot where the food was dropped
+		if ownerId ~= currentVisitingOwnerId then 
+			log("Ignoring drop: Not in this aquarium. PlotOwner:", ownerId, "CurrentVisiting:", currentVisitingOwnerId)
+			return 
+		end
+		
+		-- 🛡️ IGNORE OWN DROPS (Already animated locally)
+		if playerUserId == Player.UserId then 
+			log("Ignoring own drop signal to prevent double animation")
+			return 
+		end
+		
+		local player = Players:GetPlayerByUserId(playerUserId)
+		log("Food dropped by", player and player.Name or "Unknown", ":", foodId)
 		self:AnimateFoodDrop(foodId, position)
 	end)
 

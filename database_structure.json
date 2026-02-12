@@ -51,6 +51,23 @@
         "id_food_1770633942": 543484
       },
       "start": "2026-02-12T11:35:50Z"
+    },
+    "aquarium":{
+      "1": {
+        "maxFish": 10,
+        "maxDecoration": 3,
+        "maxTotem": 3
+      },
+      "2": {
+        "maxFish": 15,
+        "maxDecoration": 5,
+        "maxTotem": 3
+      },
+      "3": {
+        "maxFish": 20,
+        "maxDecoration": 10,
+        "maxTotem": 3
+      }
     }
   },
   "items": {
@@ -65,14 +82,18 @@
         "name": "Telur Biasa",
         "price": 500,
         "rarity": "common",
-        "reward": {
+        "eggReward": {
           "1":{
             "fishId": "id_fish_1770634168",
             "chance": 80
           },
           "2":{
             "fishId": "id_fish_1770634169",
-            "chance": 20
+            "chance": 15
+          },
+          "3":{
+            "fishId": "id_fish_1770634170",
+            "chance": 5
           }
         }
       },
@@ -86,7 +107,7 @@
         "name": "Telur Langka",
         "price": 500,
         "rarity": "common",
-        "reward": {
+        "eggReward": {
           "1":{
             "fishId": "id_fish_1770634168",
             "chance": 80
@@ -107,7 +128,7 @@
         "name": "Telur Epik",
         "price": 500,
         "rarity": "common",
-        "reward": {
+        "eggReward": {
           "1":{
             "fishId": "id_fish_1770634168",
             "chance": 80
@@ -197,6 +218,45 @@
         "price": 100,
         "rarity": "common",
         "typeSwim": "normal"
+      },
+      "id_fish_1770634170": {
+        "Adult": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 100,
+          "expGrowth": 100,
+          "mScale": 0.4,
+          "speed": 1.5
+        },
+        "Baby": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 0,
+          "expGrowth": 0,
+          "mScale": 0.4,
+          "speed": 2
+        },
+        "Senior": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 250,
+          "expGrowth": 1000,
+          "mScale": 0.4,
+          "speed": 1
+        },
+        "buyAble": true,
+        "desc": "Description",
+        "exp": 10,
+        "mDropName": "Piranha",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Piranha",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Piranha",
+        "price": 100,
+        "rarity": "common",
+        "typeSwim": "normal"
       }
     },
     "Food": {
@@ -247,6 +307,195 @@
       "id_mutation_1770634287": {
         "coinMultipler": 1.1,
         "name": "Shiny"
+      }
+    },
+    "decoration":{
+      "1":{
+        "mDropName": "Coral1",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral1",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 1",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "2":{
+        "mDropName": "Coral2",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral2",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 2",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "3":{
+        "mDropName": "Coral3",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral3",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 3",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "4":{
+        "mDropName": "Coral4",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral4",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 4",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "5":{
+        "mDropName": "Coral5",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral5",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 5",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "6":{
+        "mDropName": "Coral6",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral6",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 6",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "7":{
+        "mDropName": "Coral7",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Coral7",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Coral 7",
+        "price": 500,
+        "rarity": "common",
+        "category": "Coral",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "8":{
+        "mDropName": "Flower1",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Flower1",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Flower 1",
+        "price": 500,
+        "rarity": "common",
+        "category": "Flower",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "9":{
+        "mDropName": "Flower2",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Flower2",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Flower 2",
+        "price": 500,
+        "rarity": "common",
+        "category": "Flower",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "10":{
+        "mDropName": "Flower3",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Flower3",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Flower 3",
+        "price": 500,
+        "rarity": "common",
+        "category": "Flower",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
+      },
+      "11":{
+        "mDropName": "Tree1",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Tree1",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Tree 1",
+        "price": 500,
+        "rarity": "common",
+        "category": "Tree",
+        "effect": {
+          "coinMultipler": 1.1,
+          "addCoinCD":1,
+          "addHungerCD": 1
+        }
       }
     }
   },

@@ -92,18 +92,18 @@ function RemoteClient:InvokeServer(eventName, ...)
 
     return Promise.new(function(resolve, reject)
         local success, result = pcall(function()
-            return remoteFunction:InvokeServer({eventName = eventName, args = packedArgs})
+            return {remoteFunction:InvokeServer({eventName = eventName, args = packedArgs})}
         end)
 
         if success then
-            -- ## THE FINAL, DEFINITIVE FIX (CLIENT-SIDE) ##
-            -- The server now guarantees `result` is a table containing the actual return values.
-            -- We unpack this table to resolve the promise with the original, multi-value return.
-            if type(result) == "table" then
-                resolve(unpack(result))
+            -- 🚀 DEFINITIVE FIX: The server returns a single table {success, wonFishId}
+            -- We must unpack it to resolve with multiple values
+            if type(result[1]) == "table" then
+                warn("📡 [RemoteClient] Received packaged result, unpacking...")
+                resolve(unpack(result[1]))
             else
-                -- Fallback for unexpected or legacy results
-                resolve(result)
+                warn("📡 [RemoteClient] Received direct result:", result[1])
+                resolve(unpack(result))
             end
         else
             reject(result)

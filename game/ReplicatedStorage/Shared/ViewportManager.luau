@@ -79,7 +79,10 @@ function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: 
     model.Parent = viewport
 
     if not model.PrimaryPart and #model:GetChildren() > 0 then
-        model.PrimaryPart = model:GetChildren()[1]
+        local basePart = model:FindFirstChildWhichIsA("BasePart", true)
+        if basePart then
+            model.PrimaryPart = basePart
+        end
     end
 
     local boundingBoxCFrame, modelSize = model:GetBoundingBox()
@@ -92,6 +95,11 @@ function ViewportManager:CreateModelViewport(parentFrame: GuiObject, modelName: 
     local cameraPosition = center + (rotationCFrame * Vector3.new(0, maxDim * 0.1, distance))
     
     camera.CFrame = CFrame.new(cameraPosition, center)
+
+    -- 🔧 Visual Polish: Add lighting to make items pop (Increased for maximum clarity)
+    viewport.Ambient = Color3.fromRGB(255, 255, 255)
+    viewport.LightColor = Color3.fromRGB(255, 255, 255)
+    viewport.LightDirection = Vector3.new(0, -1, -1) -- More frontal lighting
 
     return viewport, model
 end

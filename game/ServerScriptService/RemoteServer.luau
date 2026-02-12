@@ -41,16 +41,14 @@ end
 
 function RemoteServer:FireClient(player, eventName, ...)
     if remoteEvent then
-        local packedArgs = {...}
-        local payload = {eventName = eventName, args = packedArgs}
+        local payload = {eventName = eventName, args = {...}}
         remoteEvent:FireClient(player, payload)
     end
 end
 
 function RemoteServer:FireAllClients(eventName, ...)
     if remoteEvent then
-        local packedArgs = {...}
-        local payload = {eventName = eventName, args = packedArgs}
+        local payload = {eventName = eventName, args = {...}}
         remoteEvent:FireAllClients(payload)
     end
 end
@@ -96,9 +94,10 @@ remoteFunction.OnServerInvoke = function(player, eventData)
     local handler = clientInvokeHandlers[eventData.eventName]
     if handler then
         local args = eventData.args or {}
-        -- Capture ALL return values from the handler into a single table.
-        -- This table is then sent to the client, ensuring the payload is always a single, valid table.
+        -- 🚀 DEFINITIVE FIX: Package results in a table for guaranteed transport
+        -- This ensures wonFishId (2nd return) isn't lost during the network hop
         local results = {handler(player, unpack(args))}
+        warn("📡 [RemoteServer] Packaging results for", eventData.eventName, ":", results[1], results[2])
         return results
     end
 

@@ -1,46 +1,38 @@
 --[[
-    Promise.luau (v1.1 - Menambahkan Promise.all)
+    Promise.luau (v1.2 - Fixed Chaining & Await)
 
     Implementasi library Promise yang ringan, terinspirasi dari Promise/A+.
     Memungkinkan penanganan operasi asynchronous yang lebih bersih dan terstruktur.
-    
-    Dibuat oleh: Gemini (diadaptasi dari pola umum)
 ]]
 
 local Promise = {}
 Promise.__index = Promise
 
--- Status internal sebuah Promise
 local STATUS = {
     PENDING = "Pending",
     RESOLVED = "Resolved",
     REJECTED = "Rejected",
 }
 
--- Fungsi utilitas untuk memanggil callback secara aman
-local function tryCall(callback, ...)
-    return pcall(callback, ...)
-end
-
--- Fungsi untuk membuat Promise baru
 function Promise.new(executor)
     local self = setmetatable({}, Promise)
 
     self._status = STATUS.PENDING
-    self._value = nil
+    self._values = {}
     self._reason = nil
     self._resolvedCallbacks = {}
     self._rejectedCallbacks = {}
 
-    local function resolve(value)
+    local function resolve(...)
         if self._status ~= STATUS.PENDING then return end
         
         self._status = STATUS.RESOLVED
-        self._value = value
+        self._values = {...}
         
         for _, callback in ipairs(self._resolvedCallbacks) do
-            task.spawn(callback, self._value)
+            task.spawn(callback, unpack(self._values))
         end
+        self._resolvedCallbacks = {}
     end
 
     local function reject(reason)
@@ -49,16 +41,12 @@ function Promise.new(executor)
         self._status = STATUS.REJECTED
         self._reason = reason
 
-        if #self._rejectedCallbacks == 0 then
-            warn("[Promise] Unhandled rejection:", self._reason)
-        end
-
         for _, callback in ipairs(self._rejectedCallbacks) do
             task.spawn(callback, self._reason)
         end
+        self._rejectedCallbacks = {}
     end
 
-    -- Eksekusi fungsi utama dengan aman
     local success, result = pcall(executor, resolve, reject)
     if not success then
         reject(result)
@@ -67,83 +55,97 @@ function Promise.new(executor)
     return self
 end
 
--- Menambahkan callback yang akan dijalankan saat Promise resolved
-function Promise:andThen(onResolved)
+function Promise:andThen(onResolved, onRejected)
     return Promise.new(function(resolve, reject)
-        local function newCallback(value)
-            local success, result = tryCall(onResolved, value)
-            if success then
-                resolve(result)
+        -- Success handler
+        local function handleResolved(...)
+            if typeof(onResolved) == "function" then
+                local results = {pcall(onResolved, ...)}
+                if results[1] then
+                    resolve(unpack(results, 2))
+                else
+                    reject(results[2])
+                end
             else
-                reject(result)
+                resolve(...)
+            end
+        end
+
+        -- Error handler
+        local function handleRejected(reason)
+            if typeof(onRejected) == "function" then
+                local results = {pcall(onRejected, reason)}
+                if results[1] then
+                    resolve(unpack(results, 2))
+                else
+                    reject(results[2])
+                end
+            else
+                reject(reason)
             end
         end
 
         if self._status == STATUS.RESOLVED then
-            task.spawn(newCallback, self._value)
-        elseif self._status == STATUS.PENDING then
-            table.insert(self._resolvedCallbacks, newCallback)
+            task.spawn(handleResolved, unpack(self._values))
+        elseif self._status == STATUS.REJECTED then
+            task.spawn(handleRejected, self._reason)
+        else
+            table.insert(self._resolvedCallbacks, handleResolved)
+            table.insert(self._rejectedCallbacks, handleRejected)
         end
     end)
 end
 
--- Menambahkan callback yang akan dijalankan saat Promise rejected
 function Promise:catch(onRejected)
-    return Promise.new(function(resolve, reject)
-        local function newCallback(reason)
-            local success, result = tryCall(onRejected, reason)
-            if success then
-                resolve(result)
-            else
-                reject(result)
-            end
-        end
-
-        if self._status == STATUS.REJECTED then
-            task.spawn(newCallback, self._reason)
-        elseif self._status == STATUS.PENDING then
-            table.insert(self._rejectedCallbacks, newCallback)
-        end
-    end)
+    return self:andThen(nil, onRejected)
 end
 
--- Menunggu Promise selesai dan mengembalikan nilainya (Harus dipanggil di dalam thread/coroutine)
 function Promise:await()
     if self._status == STATUS.RESOLVED then
-        return self._value
+        return unpack(self._values)
     elseif self._status == STATUS.REJECTED then
         error(self._reason)
     end
 
     local thread = coroutine.running()
-    self:andThen(function(value)
-        task.spawn(thread, value)
+    local resolvedValues = nil
+    local rejectedReason = nil
+    local completed = false
+
+    self:andThen(function(...)
+        resolvedValues = {...}
+        completed = true
+        task.spawn(thread)
     end):catch(function(reason)
-        task.spawn(thread, nil, reason)
+        rejectedReason = reason
+        completed = true
+        task.spawn(thread)
     end)
 
-    local value, reason = coroutine.yield()
-    if reason then
-        error(reason)
+    -- Loop to prevent accidental resumes
+    while not completed do
+        coroutine.yield()
     end
-    return value
+
+    if rejectedReason ~= nil then
+        error(rejectedReason)
+    end
+    return unpack(resolvedValues)
 end
 
--- Fungsi statis untuk membuat Promise yang sudah resolved
-function Promise.resolve(value)
+function Promise.resolve(...)
+    local args = {...}
     return Promise.new(function(resolve)
-        resolve(value)
+        resolve(unpack(args))
     end)
 end
 
--- Fungsi statis untuk membuat Promise yang sudah rejected
 function Promise.reject(reason)
     return Promise.new(function(_, reject)
         reject(reason)
     end)
 end
 
--- [BARU] Fungsi statis untuk menangani beberapa promise sekaligus
 function Promise.all(promises)
     return Promise.new(function(resolve, reject)
         local results = {}
@@ -156,18 +158,16 @@ function Promise.all(promises)
         end
 
         for i, promise in ipairs(promises) do
-            promise
-                :andThen(function(result)
-                    results[i] = result
-                    promisesCompleted = promisesCompleted + 1
-                    if promisesCompleted == totalPromises then
-                        resolve(results)
-                    end
-                end)
-                :catch(function(reason)
-                    -- Jika salah satu promise gagal, maka Promise.all() juga gagal
-                    reject(reason)
-                end)
+            promise:andThen(function(...)
+                local vals = {...}
+                results[i] = #vals > 1 and vals or vals[1]
+                promisesCompleted = promisesCompleted + 1
+                if promisesCompleted == totalPromises then
+                    resolve(results)
+                end
+            end):catch(function(reason)
+                reject(reason)
+            end)
         end
     end)
 end

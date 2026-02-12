@@ -31,7 +31,9 @@ return {
         Close_ico = "rbxassetid://132966276978826",
         Frame_ico = "rbxassetid://109429151935511",
         Shop_BACKGROUND ="rbxassetid://102151919452993",
-
+        Pointer_ico = "rbxassetid://120202628835237",
+        Gacha_Glow = "rbxassetid://6014264734",
+        
         -- Gameplay & Items
 		Coin_ico = "rbxassetid://120673611252447",
         Coin1_ico = "rbxassetid://92342444032080",

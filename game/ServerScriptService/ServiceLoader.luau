@@ -20,7 +20,6 @@ local INIT_ORDER = {
     "PlotService",
     "UnderwaterService",
     "LeaderboardService",
-    "InventoryService",
     "GameActions" -- GameActions is now initialized after AdminService and ShopService
 }
 
@@ -64,8 +63,6 @@ function ServiceLoader:Init()
                 args = {services["DataService"], services["RemoteService"], services["UnderwaterService"]}
             elseif serviceName == "UnderwaterService" then
                 args = {services["DataService"], services["RemoteService"]}
-            elseif serviceName == "InventoryService" then
-                args = {services["DataService"], services["RemoteService"], services["UnderwaterService"]}
             elseif serviceName == "RemoteService" then
                 args = {services["DataService"]}
             elseif serviceName == "LeaderboardService" then

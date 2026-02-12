@@ -77,9 +77,13 @@ local function setState(newState)
     -- Validasi minimal: Harus punya Coins atau Inventory untuk dianggap sebagai state
     if newState.Coins == nil and newState.Inventory == nil then
         -- Opsional: log jika perlu debug, tapi biasanya ini adalah event lain yang tidak terfilter
+        local keys = {}
+        for k in pairs(newState) do table.insert(keys, tostring(k)) end
+        print("🎨 [ClientState] setState rejected payload (missing Coins/Inventory). Payload keys:", table.concat(keys, ", "))
         return
     end
 
+    print("🎨 [ClientState] Applying new state. Coins:", newState.Coins, "Has Inventory:", newState.Inventory ~= nil)
     state = newState
     
     -- Helper to get keys for logging
@@ -92,6 +96,18 @@ local function setState(newState)
     stateChanged:Fire(state)
 end
 
+-- Memaksa pengambilan data terbaru dari server.
+function ClientState:Refresh()
+    print("🎨 [ClientState] Meminta refresh data dari server...")
+    return RemoteClient:InvokeServer("GetInitialState"):andThen(function(newState)
+        if newState then
+            setState(newState)
+            return newState
+        end
+        return nil
+    end)
+end
+
 -- Inisialisasi: Tunggu server mengirimkan state awal.
 local function init()
     print("🎨 [ClientState] Manajer state klien diinisialisasi, menunggu data awal dari server...")
@@ -101,14 +117,12 @@ local function init()
     -- Request initial state from server to ensure we don't start with empty data
     task.spawn(function()
         RemoteClient:WaitForConnection():andThen(function()
-            print("🎨 [ClientState] Menarik data awal (initial state) dari server...")
-            return RemoteClient:InvokeServer("GetInitialState")
+            return ClientState:Refresh()
         end):andThen(function(initialState)
             if initialState then
-                print("🎨 [ClientState] Data awal berhasil diterima via Invoke.")
-                setState(initialState)
+                print("🎨 [ClientState] Data awal berhasil diterima.")
             else
-                warn("🎨 [ClientState] Gagal mengambil data awal atau data masih kosong.")
+                warn("🎨 [ClientState] Gagal mengambil data awal.")
             end
         end):catch(function(err)
             warn("🎨 [ClientState] Error saat mengambil data awal:", tostring(err))

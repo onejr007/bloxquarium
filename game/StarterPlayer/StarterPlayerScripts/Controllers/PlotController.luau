@@ -22,7 +22,24 @@ local Player = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local PlotController = {}
 local UNDERWATER_POS = Vector3.new(5000, -82.5, 5000) -- CENTER of aquarium
+local AQUARIUM_SIZE = Vector3.new(60, 35, 8)
 local isInteracting = false
+local currentVisitingOwnerId: number? = nil
+
+-- UI REFERENCES
+local infoFrame: Frame? = nil
+local infoDesc: TextLabel? = nil
+local infoName: TextLabel? = nil
+local infoModelContainer: Frame? = nil
+local infoStroke: UIStroke? = nil
+local miniStroke: UIStroke? = nil
+local miniBtn: TextButton? = nil
+local hatchBtn: TextButton? = nil
+local currentFoodId: string? = nil -- Moved up for global access
+local originalPos: UDim2 = UDim2.fromScale(0.5, 0.975)
+local isMinimized = false
+local infoRotationConn: RBXScriptConnection? = nil
+local hideItemInfo: () -> () -- Forward declaration for scope access
 
 --------------------------------------------------
 -- ASSETS & THEME
@@ -80,6 +97,108 @@ local function parseRotation(rot: any): CFrame
 		return CFrame.Angles(0, math.rad(rot), 0)
 	end
 	return CFrame.new()
+end
+
+--------------------------------------------------
+-- UNDERWATER WORLD GENERATION (LOCAL)
+--------------------------------------------------
+local function GenerateUnderwaterAreaLocal()
+	local container = workspace:FindFirstChild("UnderwaterWorld")
+	if not container then
+		container = Instance.new("Folder")
+		container.Name = "UnderwaterWorld"
+		container.Parent = workspace
+	else
+		-- Clear existing drops if any
+		for _, child in ipairs(container:GetChildren()) do
+			if child:IsA("Model") and child.Name:find("InvItem_") or child.Name:find("Food_") then
+				child:Destroy()
+			end
+		end
+	end
+	
+	local boxSize = AQUARIUM_SIZE
+	local halfY = boxSize.Y / 2
+	
+	-- Floor (Sand/Gravel)
+	if not container:FindFirstChild("UnderwaterFloor") then
+		local floor = Instance.new("Part")
+		floor.Name = "UnderwaterFloor"
+		floor.Size = Vector3.new(boxSize.X + 2, 1, boxSize.Z)
+		floor.Position = UNDERWATER_POS - Vector3.new(0, halfY + 0.5, 0)
+		floor.Anchored = true
+		floor.Material = Enum.Material.Sand
+		floor.Color = Color3.fromRGB(180, 170, 130)
+		floor.Parent = container
+	end
+	
+	-- Background Wall
+	if not container:FindFirstChild("BackgroundWall") then
+		local backWall = Instance.new("Part")
+		backWall.Name = "BackgroundWall"
+		backWall.Size = Vector3.new(boxSize.X + 100, boxSize.Y + 60, 1)
+		backWall.Position = UNDERWATER_POS - Vector3.new(0, 0, boxSize.Z/2 + 2)
+		backWall.Anchored = true
+		backWall.Material = Enum.Material.Concrete
+		backWall.Color = Color3.fromRGB(10, 35, 70)
+		backWall.CastShadow = false
+		backWall.Parent = container
+	end
+	
+	local function createGlassWall(name, size, pos, transparency)
+		local g = container:FindFirstChild(name)
+		if not g then
+			g = Instance.new("Part")
+			g.Name = name
+			g.Size = size
+			g.Position = pos
+			g.Anchored = true
+			g.Material = Enum.Material.Glass
+			g.Transparency = transparency or 0.9
+			g.Color = Color3.fromRGB(150, 220, 255)
+			g.CastShadow = false
+			g.CanCollide = true
+			g.Parent = container
+		end
+		return g
+	end
+	
+	-- Left & Right Walls
+	createGlassWall("LeftWall", Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(boxSize.X/2, 0, 0))
+	createGlassWall("RightWall", Vector3.new(1, boxSize.Y, boxSize.Z), UNDERWATER_POS + Vector3.new(-boxSize.X/2, 0, 0))
+	
+	-- Top/Ceiling
+	createGlassWall("Ceiling", Vector3.new(boxSize.X, 1, boxSize.Z), UNDERWATER_POS + Vector3.new(0, halfY, 0), 0.9)
+
+	-- Define Aquarium Bounds for 2D Logic (Invisible Part)
+	if not container:FindFirstChild("AquariumBounds") then
+		local bounds = Instance.new("Part")
+		bounds.Name = "AquariumBounds"
+		bounds.Size = boxSize
+		bounds.Position = UNDERWATER_POS
+		bounds.Anchored = true
+		bounds.Transparency = 1
+		bounds.CanCollide = false
+		bounds.Parent = container
+	end
+	
+	-- Lighting
+	if not container:FindFirstChild("LightSource") then
+		local lightPart = Instance.new("Part")
+		lightPart.Name = "LightSource"
+		lightPart.Size = Vector3.new(1, 1, 1)
+		lightPart.Position = UNDERWATER_POS + Vector3.new(0, boxSize.Y - 2, 0)
+		lightPart.Anchored = true
+		lightPart.Transparency = 1
+		lightPart.CanCollide = false
+		lightPart.Parent = container
+
+		local light = Instance.new("PointLight")
+		light.Range = 100
+		light.Brightness = 3
+		light.Color = Color3.fromRGB(100, 200, 255)
+		light.Parent = lightPart
+	end
 end
 
 --------------------------------------------------
@@ -185,93 +304,125 @@ local function createUnderwaterGui(onClose: () -> ())
 	--------------------------------------------------
 	-- ITEM INFO PANEL (FIXED POS + LOWER + NO OVERLAY BUG)
 	--------------------------------------------------
-	local infoFrame = Instance.new("Frame", sg)
+	infoFrame = Instance.new("Frame", sg)
 	infoFrame.Name = "ItemInfoPanel"
-	infoFrame.Size = UDim2.fromScale(0.3, 0)
+	infoFrame.Size = UDim2.fromOffset(210, 100) -- 🔧 LEBIH KECIL LAGI
 	infoFrame.AutomaticSize = Enum.AutomaticSize.Y
-	infoFrame.Position = UDim2.fromScale(0.5, 0.975)
+	infoFrame.Position = UDim2.fromScale(0.5, 0.99)
 	infoFrame.AnchorPoint = Vector2.new(0.5, 1)
 	infoFrame.BackgroundColor3 = THEME.PRIMARY
 	infoFrame.BackgroundTransparency = 1
 	infoFrame.Visible = false
-	infoFrame.ZIndex = 1 -- 🔧 DIPERKECIL agar tidak menimpa konten internal
+	infoFrame.ZIndex = 1
+	infoFrame.ClipsDescendants = true
 
-	Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 18)
-	local infoStroke = Instance.new("UIStroke", infoFrame)
-	infoStroke.Color, infoStroke.Thickness = THEME.ACCENT, 2
+	Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 6)
+	infoStroke = Instance.new("UIStroke", infoFrame)
+	infoStroke.Color, infoStroke.Thickness = THEME.ACCENT, 1.5
+	infoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
-	-- 🔧 CONTENT CONTAINER: agar UIListLayout & Padding tidak mengganggu tombol close
-	local contentContainer = Instance.new("Frame", infoFrame)
-	contentContainer.Name = "Content"
-	contentContainer.Size = UDim2.fromScale(1, 0)
-	contentContainer.AutomaticSize = Enum.AutomaticSize.Y
-	contentContainer.BackgroundTransparency = 1
+	local header = Instance.new("Frame", infoFrame)
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 28) -- 🔧 LEBIH KECIL
+	header.BackgroundTransparency = 1
+	header.ZIndex = 2
 
-	local infoPadding = Instance.new("UIPadding", contentContainer)
-	infoPadding.PaddingLeft = UDim.new(0, 14)
-	infoPadding.PaddingRight = UDim.new(0, 14)
-	infoPadding.PaddingTop = UDim.new(0, 12)
-	infoPadding.PaddingBottom = UDim.new(0, 12)
+	local headerPadding = Instance.new("UIPadding", header)
+	headerPadding.PaddingLeft = UDim.new(0, 6)
+	headerPadding.PaddingRight = UDim.new(0, 6)
 
-	local infoLayout = Instance.new("UIListLayout", contentContainer)
-	infoLayout.Padding = UDim.new(0, 10)
-	infoLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	miniBtn = Instance.new("TextButton", header)
+	miniBtn.Name = "MinimizeButton"
+	miniBtn.Size = UDim2.fromOffset(20, 20)
+	miniBtn.Position = UDim2.new(0, 4, 0.5, 0)
+	miniBtn.AnchorPoint = Vector2.new(0, 0.5)
+	miniBtn.BackgroundColor3 = THEME.SECONDARY
+	miniBtn.BorderSizePixel = 0
+	miniBtn.Text = "v"
+	miniBtn.Font = Enum.Font.GothamBold
+	miniBtn.TextSize = 12
+	miniBtn.TextColor3 = THEME.TEXT
+	miniBtn.ZIndex = 3
 
-	local infoTitle = Instance.new("TextLabel", contentContainer)
-	infoTitle.Size = UDim2.fromScale(1, 0)
-	infoTitle.AutomaticSize = Enum.AutomaticSize.Y
-	infoTitle.BackgroundTransparency = 1
-	infoTitle.Font = Enum.Font.GothamBlack
-	infoTitle.TextSize = 18
-	infoTitle.TextColor3 = THEME.TEXT
-	infoTitle.TextWrapped = true
-	infoTitle.Text = "ITEM INFO"
+	Instance.new("UICorner", miniBtn).CornerRadius = UDim.new(0, 4)
+	miniStroke = Instance.new("UIStroke", miniBtn)
+	miniStroke.Color = THEME.ACCENT
+	miniStroke.Thickness = 1
 
-	local infoName = Instance.new("TextLabel", contentContainer)
-	infoName.Size = UDim2.fromScale(1, 0)
-	infoName.AutomaticSize = Enum.AutomaticSize.Y
+	infoName = Instance.new("TextLabel", header)
+	infoName.Name = "ItemName"
+	infoName.Size = UDim2.new(1, -34, 1, 0)
+	infoName.Position = UDim2.new(0, 30, 0, 0)
 	infoName.BackgroundTransparency = 1
 	infoName.Font = Enum.Font.GothamBold
-	infoName.TextSize = 14
+	infoName.TextSize = 11 -- 🔧 LEBIH KECIL
 	infoName.TextColor3 = THEME.ACCENT
+	infoName.TextXAlignment = Enum.TextXAlignment.Left
 	infoName.TextWrapped = true
-	infoName.Text = ""
+	infoName.ZIndex = 3
 
-	local infoDesc = Instance.new("TextLabel", contentContainer)
+	-- 🔧 BODY CONTAINER (Viewport + Stats)
+	local body = Instance.new("Frame", infoFrame)
+	body.Name = "Body"
+	body.Size = UDim2.new(1, 0, 0, 0)
+	body.AutomaticSize = Enum.AutomaticSize.Y
+	body.Position = UDim2.new(0, 0, 0, 28) -- 🔧 MENYESUAIKAN
+	body.BackgroundTransparency = 1
+	body.ZIndex = 2
+
+	local bodyPadding = Instance.new("UIPadding", body)
+	bodyPadding.PaddingLeft = UDim.new(0, 6)
+	bodyPadding.PaddingRight = UDim.new(0, 6)
+	bodyPadding.PaddingBottom = UDim.new(0, 6)
+
+	local bodyLayout = Instance.new("UIListLayout", body)
+	bodyLayout.FillDirection = Enum.FillDirection.Horizontal
+	bodyLayout.Padding = UDim.new(0, 6)
+	bodyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+	infoModelContainer = Instance.new("Frame", body)
+	infoModelContainer.Name = "ModelPreviewContainer"
+	infoModelContainer.Size = UDim2.fromOffset(50, 50) -- 🔧 LEBIH KECIL
+	infoModelContainer.BackgroundTransparency = 1
+	infoModelContainer.ZIndex = 3
+
+	local rightContent = Instance.new("Frame", body)
+	rightContent.Name = "RightContent"
+	rightContent.Size = UDim2.new(1, -62, 0, 0) -- 🔧 MENYESUAIKAN
+	rightContent.AutomaticSize = Enum.AutomaticSize.Y
+	rightContent.BackgroundTransparency = 1
+	rightContent.ZIndex = 2
+
+	local rightLayout = Instance.new("UIListLayout", rightContent)
+	rightLayout.Padding = UDim.new(0, 2)
+	rightLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+
+	infoDesc = Instance.new("TextLabel", rightContent)
+	infoDesc.Name = "StatsLabel"
 	infoDesc.Size = UDim2.fromScale(1, 0)
 	infoDesc.AutomaticSize = Enum.AutomaticSize.Y
 	infoDesc.BackgroundTransparency = 1
 	infoDesc.Font = Enum.Font.GothamMedium
-	infoDesc.TextSize = 12
+	infoDesc.TextSize = 9 -- 🔧 LEBIH KECIL
 	infoDesc.TextColor3 = THEME.TEXT
+	infoDesc.TextXAlignment = Enum.TextXAlignment.Left
 	infoDesc.TextWrapped = true
-	infoDesc.Text = ""
-
-	--------------------------------------------------
-	-- ACTION BUTTONS CONTAINER
-	--------------------------------------------------
-	local actionContainer = Instance.new("Frame", contentContainer)
-	actionContainer.Size = UDim2.fromScale(1, 0)
-	actionContainer.AutomaticSize = Enum.AutomaticSize.Y
-	actionContainer.BackgroundTransparency = 1
-
-	local actionLayout = Instance.new("UIListLayout", actionContainer)
-	actionLayout.Padding = UDim.new(0, 8)
-	actionLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	infoDesc.ZIndex = 3
 
 	--------------------------------------------------
 	-- HATCH BUTTON (ONLY FOR EGG)
 	--------------------------------------------------
-	local hatchBtn = Instance.new("TextButton", actionContainer)
-	hatchBtn.Size = UDim2.fromScale(0.7, 0)
-	hatchBtn.AutomaticSize = Enum.AutomaticSize.Y
+	hatchBtn = Instance.new("TextButton", rightContent)
+	hatchBtn.Name = "HatchButton"
+	hatchBtn.Size = UDim2.new(0.95, 0, 0, 18) -- 🔧 LEBIH KECIL
 	hatchBtn.BackgroundColor3 = THEME.SUCCESS
 	hatchBtn.TextColor3 = THEME.PRIMARY
 	hatchBtn.Font = Enum.Font.GothamBlack
-	hatchBtn.TextSize = 13
+	hatchBtn.TextSize = 9
 	hatchBtn.Text = "HATCH"
 	hatchBtn.Visible = false
-	Instance.new("UICorner", hatchBtn).CornerRadius = UDim.new(0, 10)
+	hatchBtn.ZIndex = 3
+	Instance.new("UICorner", hatchBtn).CornerRadius = UDim.new(0, 4)
 
 	hatchBtn.MouseEnter:Connect(function()
 		TweenService:Create(hatchBtn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(110, 240, 170)}):Play()
@@ -285,35 +436,19 @@ local function createUnderwaterGui(onClose: () -> ())
 		Remote:FireServer("RequestHatchEgg", infoName.Text)
 	end)
 
-	--------------------------------------------------
-	-- CLOSE BUTTON (INFO FRAME) 🔧 FIXED
-	--------------------------------------------------
-    local infoClose = Instance.new("ImageButton", infoFrame)
-    infoClose.Size = UDim2.fromOffset(22, 22)
-    infoClose.Position = UDim2.new(1, -10, 0, 10) -- Pojok kanan atas (tanpa gangguan padding)
-    infoClose.AnchorPoint = Vector2.new(1, 0)
-    infoClose.BackgroundTransparency = 1
-    infoClose.Image = CLOSE_ICO
-    infoClose.ImageColor3 = Color3.fromRGB(255, 0, 0) -- MERAH MURNI
-    infoClose.AutoButtonColor = false
-    infoClose.ZIndex = 10 -- Dipastikan di atas content
-
-
-
-	local closeAspect = Instance.new("UIAspectRatioConstraint", infoClose)
-	closeAspect.AspectRatio = 1
-
-	infoClose.MouseEnter:Connect(function()
-		TweenService:Create(infoClose, TweenInfo.new(0.12), {
-			ImageTransparency = 0,
-			Size = UDim2.fromOffset(26, 26),
-		}):Play()
-	end)
-
-	infoClose.MouseLeave:Connect(function()
-		TweenService:Create(infoClose, TweenInfo.new(0.12), {
-			ImageTransparency = 0,
-			Size = UDim2.fromOffset(22, 22),
+	-- 🔧 MINIMIZE LOGIC (Tebal 28px saat mini)
+	isMinimized = false
+	originalPos = UDim2.fromScale(0.5, 0.99)
+	
+	miniBtn.MouseButton1Click:Connect(function()
+		isMinimized = not isMinimized
+		miniBtn.Text = isMinimized and "^" or "v"
+		
+		-- Saat minimize, geser frame ke bawah hingga hanya header (28px) yang terlihat
+		local targetPos = isMinimized and UDim2.new(0.5, 0, 0.99, infoFrame.AbsoluteSize.Y - 28) or originalPos
+		
+		TweenService:Create(infoFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Position = targetPos
 		}):Play()
 	end)
 
@@ -420,6 +555,23 @@ local function createUnderwaterGui(onClose: () -> ())
 	coinLabel.TextColor3 = THEME.TEXT
 	coinLabel.Text = "0"
 
+	hideItemInfo = function()
+		if not infoFrame or not infoFrame.Visible then return end
+		
+		if infoRotationConn then
+			infoRotationConn:Disconnect()
+			infoRotationConn = nil
+		end
+
+		TweenService:Create(infoFrame, TweenInfo.new(0.12), {
+			BackgroundTransparency = 1
+		}):Play()
+		task.delay(0.12, function()
+			if infoFrame then infoFrame.Visible = false end
+			if hatchBtn then hatchBtn.Visible = false end
+		end)
+	end
+
 	--------------------------------------------------
 	-- INVENTORY LOGIC
 	--------------------------------------------------
@@ -440,19 +592,6 @@ local function createUnderwaterGui(onClose: () -> ())
 		if not emptyLabel.Visible then return end
 		TweenService:Create(emptyLabel, TweenInfo.new(0.12), {TextTransparency = 1}):Play()
 		task.delay(0.12, function() emptyLabel.Visible = false end)
-	end
-
-	local function hideItemInfo()
-		if not infoFrame.Visible then return end
-		TweenService:Create(infoFrame, TweenInfo.new(0.12), {
-			BackgroundTransparency = 1
-		}):Play()
-		task.delay(0.12, function()
-			infoFrame.Visible = false
-			hatchBtn.Visible = false
-			-- 🔧 REMOVED: PlotController:StopFoodDropMode() here 
-			-- because we want drop mode to continue after clicking "Drop"
-		end)
 	end
 
 	local function closeAllMenusExceptInfo()
@@ -476,59 +615,137 @@ local function createUnderwaterGui(onClose: () -> ())
 	local function showItemInfo(id: string, count: number, category: string)
 		local itemData = Assets.GetItemData(id)
 		local modelName = itemData and (itemData.mInfoName or itemData.mDropName or itemData.name) or tostring(id)
-
-		infoName.Text = modelName:upper()
-		infoDesc.Text = itemData and itemData.desc or "Jumlah: x"..tostring(count)
-
-		hatchBtn.Visible = (category == "Egg")
-
-		-- 🔧 DROP BUTTON (ONLY FOR FOOD)
-		local dropBtn = actionContainer:FindFirstChild("DropButton") :: TextButton?
-		if not dropBtn then
-			dropBtn = hatchBtn:Clone() :: TextButton
-			dropBtn.Name = "DropButton"
-			dropBtn.Parent = actionContainer
-			dropBtn.Text = "DROP"
-			dropBtn.BackgroundColor3 = THEME.ACCENT
-		end
-		dropBtn.Visible = (category == "Food")
 		
-		-- Clear old connections
-		if uiConnections[dropBtn] then
-			uiConnections[dropBtn]:Disconnect()
-			uiConnections[dropBtn] = nil
+		-- 🎨 UPDATE BORDER WARNA RARITY
+		local rarityColor = itemData and THEME[itemData.rarity or "Common"] or THEME.ACCENT
+		if infoStroke then infoStroke.Color = rarityColor end
+		if miniStroke then miniStroke.Color = rarityColor end
+		
+		if infoName then
+			infoName.Text = modelName:upper()
+			infoName.TextColor3 = rarityColor
 		end
 		
-		uiConnections[dropBtn] = dropBtn.MouseButton1Click:Connect(function()
-			log("Drop requested for:", id)
-			PlotController:StartFoodDropMode(id)
-			hideItemInfo()
-		end)
+		local statsText = ""
+		if category == "Food" then
+			statsText = string.format(
+				"RARITY: %s\nEXP: +%d\nHUNGER CD: %ds\nSTOCK: x%d",
+				(itemData.rarity or "COMMON"):upper(),
+				itemData.addExp or 0,
+				itemData.addHungerCD or 0,
+				count
+			)
+		elseif category == "Fish" then
+			statsText = string.format(
+				"RARITY: %s\nNAME: %s\nEXP: +%d\nHUNGER CD: %ds",
+				(itemData.rarity or "COMMON"):upper(),
+				(itemData.name or "UNKNOWN"):upper(),
+				itemData.addExp or 0,
+				itemData.addHungerCD or 0
+			)
+		else
+			statsText = itemData and itemData.desc or "Jumlah: x"..tostring(count)
+		end
+		
+		if infoDesc then infoDesc.Text = statsText end
+		
+		if hatchBtn then hatchBtn.Visible = (category == "Egg") end
+		
+		if category == "Food" then
+			if toggleMenu then toggleMenu(false) end
+			closeAllMenusExceptInfo()
+		end
+		
+		-- Viewport update
+		if infoModelContainer then
+			infoModelContainer:ClearAllChildren() -- 🔧 FIXED: Hapus model lama agar tidak bertumpuk
+			local _, model = ViewportManager:CreateModelViewport(
+				infoModelContainer,
+				modelName,
+				itemData and itemData.mInfoRotate or 0,
+				itemData and itemData.mInfoScale or 1
+			)
 
-		-- 🔧 HIDE CATEGORY MENU: trigger toggle button false
-		if toggleMenu then toggleMenu(false) end
-		closeAllMenusExceptInfo()
+			if infoRotationConn then
+				infoRotationConn:Disconnect()
+				infoRotationConn = nil
+			end
 
-		infoFrame.Visible = true
-		infoFrame.BackgroundTransparency = 1
-		TweenService:Create(infoFrame, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			BackgroundTransparency = 0
-		}):Play()
+			if model then
+				local baseRotation = model:GetPivot()
+				local currentRot = 0
+				infoRotationConn = RunService.RenderStepped:Connect(function(dt)
+					if not model or not model.Parent then
+						if infoRotationConn then infoRotationConn:Disconnect() end
+						return
+					end
+					currentRot += dt * 60 -- Slow rotation for info frame
+					model:PivotTo(baseRotation * CFrame.Angles(0, math.rad(currentRot), 0))
+				end)
+			end
+		end
+		
+		-- Reset minimize state when opening new info
+		isMinimized = false
+		if miniBtn then miniBtn.Text = "v" end
+		if infoFrame then 
+			infoFrame.Position = originalPos 
+			infoFrame.Visible = true
+			infoFrame.BackgroundTransparency = 1
+			TweenService:Create(infoFrame, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				BackgroundTransparency = 0
+			}):Play()
+		end
 	end
-
-	-- 🔧 CLOSE INFO FRAME: hanya toggle panel info, tidak mengganggu menu
-	infoClose.MouseButton1Click:Connect(function()
-		hideItemInfo()
-	end)
 
 	local function populateInventory(category: string)
 		log("Populate inventory:", category)
 		clearInventory()
 		hideEmpty()
 
+		local currentHoverItem: string? = nil
+		local rotationConn: RBXScriptConnection? = nil
+		local currentRotationY = 0
+
+		local function stopRotation()
+			if rotationConn then
+				rotationConn:Disconnect()
+				rotationConn = nil
+			end
+		end
+
+		local function startRotation(model: Model, baseRotation: CFrame)
+			stopRotation()
+			currentRotationY = 0
+			rotationConn = RunService.RenderStepped:Connect(function(dt)
+				if not model or not model.Parent then 
+					stopRotation()
+					return 
+				end
+				currentRotationY += dt * 90 -- 90 degrees per second
+				model:PivotTo(baseRotation * CFrame.Angles(0, math.rad(currentRotationY), 0))
+			end)
+		end
+
 		local state = ClientState:GetState()
-		log("Current state for inventory:", state ~= nil, state and state.Inventory ~= nil)
+		log("Current state for inventory check:", 
+			"State exists:", state ~= nil, 
+			"Inventory exists:", state and state.Inventory ~= nil,
+			"Category exists:", state and state.Inventory and state.Inventory[category] ~= nil
+		)
+		
 		if not state or not state.Inventory then
+			-- 🧪 DEBUG: Try to pull state again just in case
+			log("Inventory missing in state, requesting refresh...")
+			ClientState:Refresh():andThen(function(newState)
+				if newState and newState.Inventory then
+					log("Refresh successful, retrying populate...")
+					populateInventory(category)
+				else
+					log("Refresh failed to provide inventory.")
+				end
+			end)
+			
 			showEmpty("DATA SEDANG DIMUAT...")
 			return
 		end
@@ -563,13 +780,28 @@ local function createUnderwaterGui(onClose: () -> ())
 			local itemData = Assets.GetItemData(id)
 			local modelName = itemData and (itemData.mInfoName or itemData.mDropName or itemData.name) or tostring(id)
 
-			ViewportManager:CreateModelViewport(
+			local _, model = ViewportManager:CreateModelViewport(
 				vpf,
 				modelName,
 				itemData and itemData.mInfoRotate or 0,
 				itemData and tonumber(itemData.mInfoScale) or 0.9,
 				itemData -- Pass metadata (mInfoRotate, mInfoScale)
 			)
+
+			local baseRotation = model and model:GetPivot() or CFrame.new()
+
+			item.MouseEnter:Connect(function()
+				if model then
+					startRotation(model, baseRotation)
+				end
+			end)
+
+			item.MouseLeave:Connect(function()
+				stopRotation()
+				if model then
+					model:PivotTo(baseRotation)
+				end
+			end)
 
 			local nameLbl = Instance.new("TextLabel", item)
 			nameLbl.Size = UDim2.new(1,0,0,12)
@@ -599,6 +831,9 @@ local function createUnderwaterGui(onClose: () -> ())
 
 			item.MouseButton1Click:Connect(function()
 				showItemInfo(id, count, category)
+				if category == "Food" then
+					PlotController:StartFoodDropMode(id)
+				end
 			end)
 		end
 
@@ -760,6 +995,16 @@ local function createUnderwaterGui(onClose: () -> ())
 	-- INVENTORY STATE SYNC
 	--------------------------------------------------
 	ClientState:OnChange(function(newState)
+		-- 🔧 REALTIME INFO FRAME AUTO-CLOSE (If stock is 0)
+		if infoFrame and infoFrame.Visible and currentFoodId then
+			local foodStock = newState.Inventory and newState.Inventory.Food and newState.Inventory.Food[currentFoodId] or 0
+			if foodStock <= 0 then
+				log("Stock empty for current food, auto-closing info frame")
+				PlotController:StopFoodDropMode()
+				hideItemInfo()
+			end
+		end
+
 		if not menuFrame.Visible or not currentMenu then return end
 		
 		local inventory = newState.Inventory and newState.Inventory[currentMenu]
@@ -805,24 +1050,19 @@ local AQUARIUM_SIZE = Vector3.new(60, 35, 8)
 
 local function getMousePlanePos(mouse: Mouse)
 	local ray = Camera:ScreenPointToRay(mouse.X, mouse.Y)
-	local planeZ = UNDERWATER_POS.Z + 4 -- 🔧 Majukan ke Z=5004 agar benar-benar di depan BackgroundWall
+	local planeZ = UNDERWATER_POS.Z -- 🔧 FIXED: Gunakan tepat di tengah aquarium (Z=5000)
 	
-	-- t = (planeZ - origin.Z) / direction.Z
+	-- t = (planeZ - ray.Origin.Z) / ray.Direction.Z
 	if math.abs(ray.Direction.Z) < 0.0001 then 
 		log("Ray parallel to plane")
 		return nil 
 	end
 	local t = (planeZ - ray.Origin.Z) / ray.Direction.Z
-	
-	-- We allow negative t if the plane is behind the camera but within range? 
-	-- Actually, for an aquarium view, the plane SHOULD be in front.
-	if t < 0 then 
-		-- log("Ray pointing away from plane")
-		-- return nil 
-	end
-	
+
 	local pos = ray.Origin + ray.Direction * t
-	return pos
+	
+	-- 🔧 FORCE Z POSITION: Pastikan Z benar-benar 0 (relatif ke UNDERWATER_POS)
+	return Vector3.new(pos.X, pos.Y, UNDERWATER_POS.Z)
 end
 
 function PlotController:AnimateFoodDrop(foodId: string, position: Vector3)
@@ -853,6 +1093,19 @@ function PlotController:AnimateFoodDrop(foodId: string, position: Vector3)
 	end
 	
 	local drop = foodModel:Clone()
+	
+	-- 🔧 ENSURE PRIMARYPART
+	if not drop.PrimaryPart then
+		local part = drop:FindFirstChildWhichIsA("BasePart", true)
+		if part then
+			drop.PrimaryPart = part
+		else
+			log("ERROR: Food model has no parts:", modelName)
+			drop:Destroy()
+			return
+		end
+	end
+	
 	drop.Parent = workspace:FindFirstChild("UnderwaterWorld") or workspace
 	
 	-- Apply mDropRotate and mDropScale
@@ -863,36 +1116,76 @@ function PlotController:AnimateFoodDrop(foodId: string, position: Vector3)
 	drop:PivotTo(CFrame.new(position) * rotationCFrame)
 	
 	if dropScale ~= 1 then
-		if drop.PrimaryPart then
-			drop:ScaleTo(dropScale)
-		else
-			-- Fallback if no PrimaryPart
-			for _, part in ipairs(drop:GetDescendants()) do
-				if part:IsA("BasePart") then
-					part.Size *= dropScale
-				end
-			end
-		end
+		drop:ScaleTo(dropScale)
 	end
 	
-	-- Fall animation
+	-- 🎭 PROFESSIONAL ANIMATION (FALL + ROTATION)
 	local floorY = UNDERWATER_POS.Y - (AQUARIUM_SIZE.Y / 2)
-	local fallTargetY = floorY + 0.5
-	local fallTime = math.abs(position.Y - fallTargetY) / 10 -- Speed: 10 units per sec
+	local fallTargetY = floorY + 1.8 -- 🔧 KEMBALIKAN: Agar benar-benar di atas pasir sesuai permintaan
 	
-	local tween = TweenService:Create(drop.PrimaryPart or drop:FindFirstChildWhichIsA("BasePart"), 
-		TweenInfo.new(fallTime, Enum.EasingStyle.Linear), 
-		{Position = Vector3.new(position.X, fallTargetY, position.Z)}
+	-- Random speed & rotation
+	local fallSpeed = 3 + math.random() * 2.5 -- 🔧 KURANGI LAGI: Lebih lambat (sebelumnya 5 + random 4)
+	local rotSpeed = Vector3.new(
+		math.random(-100, 100),
+		math.random(-100, 100),
+		math.random(-100, 100)
 	)
+
+	local currentY = position.Y
+	local currentRotation = CFrame.Angles(0,0,0) -- Simpan state rotasi terpisah
 	
-	tween:Play()
-	tween.Completed:Connect(function()
-		task.wait(3)
-		TweenService:Create(drop.PrimaryPart or drop:FindFirstChildWhichIsA("BasePart"), 
-			TweenInfo.new(0.5), 
-			{Transparency = 1}
-		):Play()
-		task.delay(0.5, function() drop:Destroy() end)
+	local rotConn
+	rotConn = RunService.Heartbeat:Connect(function(dt)
+		if not drop or not drop.Parent then
+			if rotConn then rotConn:Disconnect() end
+			return
+		end
+
+		currentY -= fallSpeed * dt
+		
+		-- Update rotasi state
+		currentRotation *= CFrame.Angles(
+			math.rad(rotSpeed.X * dt),
+			math.rad(rotSpeed.Y * dt),
+			math.rad(rotSpeed.Z * dt)
+		)
+		
+		if currentY <= fallTargetY then
+			if rotConn then rotConn:Disconnect() end
+			currentY = fallTargetY
+			
+			-- 🔧 FIXED: Statis diam total (posisi X, Z dan rotasi dikunci) - TANPA EFEK PANTUL
+			drop:PivotTo(CFrame.new(position.X, fallTargetY, position.Z) * currentRotation)
+			
+			-- Jalankan sequence landing di thread terpisah
+			task.spawn(function()
+				-- 1. BERKEDIP (3 Detik) - Langsung berkedip setelah mendarat
+				local blinkStart = os.clock()
+				local blinkDuration = 3
+				local isVisible = true
+				
+				while drop and drop.Parent and (os.clock() - blinkStart < blinkDuration) do
+					local elapsed = os.clock() - blinkStart
+					local ratio = elapsed / blinkDuration
+					local waitTime = math.max(0.04, 0.35 * (1 - ratio))
+					
+					isVisible = not isVisible
+					for _, p in ipairs(drop:GetDescendants()) do
+						if p:IsA("BasePart") then
+							p.Transparency = isVisible and 0 or 1
+						end
+					end
+					
+					task.wait(waitTime)
+				end
+
+				-- 2. HILANG
+				if drop then drop:Destroy() end
+			end)
+		else
+			-- Terapkan posisi dan rotasi selama jatuh
+			drop:PivotTo(CFrame.new(position.X, currentY, position.Z) * currentRotation)
+		end
 	end)
 end
 
@@ -901,17 +1194,22 @@ end
 --------------------------------------------------
 local activeFoodModel: Model? = nil
 local dropModeActive = false
-local currentFoodId: string? = nil
+-- local currentFoodId: string? = nil -- Moved up to UI REFERENCES
 
 -- local AQUARIUM_SIZE = Vector3.new(60, 35, 8) -- Moved up
 
 local dropConnections = {}
+local lastDropTime = 0
+local DROP_COOLDOWN = 0.1 -- 🔧 COOLDOWN SINGKAT: Mencegah spam berlebihan tapi tetap responsif
 
 function PlotController:StartFoodDropMode(foodId: string)
-	if dropModeActive then self:StopFoodDropMode() end
+	if dropModeActive and currentFoodId == foodId then return end
 	
-	currentFoodId = foodId
+	-- Clean up previous mode if switching food
+	self:StopFoodDropMode()
+	
 	dropModeActive = true
+	currentFoodId = foodId
 	
 	local itemData = Assets.GetItemData(foodId)
 	local modelName = itemData and (itemData.mDropName or itemData.name) or foodId
@@ -938,11 +1236,22 @@ function PlotController:StartFoodDropMode(foodId: string)
 		log("Found food model, cloning...")
 		activeFoodModel = foodModel:Clone()
 		
+		-- 🔧 ENSURE PRIMARYPART for preview
+		if not activeFoodModel.PrimaryPart then
+			local part = activeFoodModel:FindFirstChildWhichIsA("BasePart", true)
+			if part then activeFoodModel.PrimaryPart = part end
+		end
+
 		-- Apply mDropRotate and mDropScale for preview
 		local dropRotate = itemData and itemData.mDropRotate or "0,0,0"
 		local dropScale = itemData and itemData.mDropScale or 1
 		local rotationCFrame = parseRotation(dropRotate)
 		
+		-- Apply scale before setting position
+		if dropScale ~= 1 then
+			activeFoodModel:ScaleTo(dropScale)
+		end
+
 		-- Set initial position immediately
 		local targetPos = getMousePlanePos(mouse)
 		if targetPos then
@@ -952,16 +1261,6 @@ function PlotController:StartFoodDropMode(foodId: string)
 		activeFoodModel.Parent = workspace:FindFirstChild("UnderwaterWorld") or workspace
 		log("Preview model parented to UnderwaterWorld at pivot:", activeFoodModel:GetPivot())
 		
-		if dropScale ~= 1 then
-			if activeFoodModel.PrimaryPart then
-				activeFoodModel:ScaleTo(dropScale)
-			else
-				for _, part in ipairs(activeFoodModel:GetDescendants()) do
-					if part:IsA("BasePart") then part.Size *= dropScale end
-				end
-			end
-		end
-
 		for _, part in ipairs(activeFoodModel:GetDescendants()) do
 			if part:IsA("BasePart") then
 				part.CanCollide = false
@@ -1010,6 +1309,28 @@ function PlotController:StartFoodDropMode(foodId: string)
 				end
 			end
 		end
+
+		-- 🔧 REALTIME STOCK UPDATE (Update text di Info Frame)
+		local state = ClientState:GetState()
+		local currentStock = state.Inventory and state.Inventory.Food and state.Inventory.Food[foodId] or 0
+		
+		-- 🔧 FIXED: Tutup info frame jika stok habis
+		if currentStock <= 0 then
+			self:StopFoodDropMode()
+			hideItemInfo()
+			return
+		end
+
+		if infoDesc then
+			local statsText = string.format(
+				"RARITY: %s\nEXP: +%d\nHUNGER CD: %ds\nSTOCK: x%d",
+				(itemData.rarity or "COMMON"):upper(),
+				itemData.addExp or 0,
+				itemData.addHungerCD or 0,
+				currentStock
+			)
+			infoDesc.Text = statsText
+		end
 	end)
 	
 	-- Click to drop
@@ -1028,6 +1349,11 @@ function PlotController:StartFoodDropMode(foodId: string)
 			if targetPos.X >= minBound.X and targetPos.X <= maxBound.X and
 			   targetPos.Y >= minBound.Y and targetPos.Y <= maxBound.Y then
 				
+				-- 🔧 DEBOUNCE / COOLDOWN CHECK
+				local now = os.clock()
+				if now - lastDropTime < DROP_COOLDOWN then return end
+				lastDropTime = now
+
 				log("Firing RequestDropFood for:", currentFoodId, "at", targetPos)
 				Remote:FireServer("RequestDropFood", currentFoodId, targetPos)
 				
@@ -1041,6 +1367,9 @@ function PlotController:StartFoodDropMode(foodId: string)
 			else
 				log("Drop rejected: Out of bounds", targetPos)
 			end
+		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
+			log("Right click — stopping food drop mode")
+			self:StopFoodDropMode()
 		end
 	end)
 end
@@ -1064,7 +1393,8 @@ end
 --------------------------------------------------
 function PlotController:Init()
 	-- Handle food drops from server
-	Remote:On("FoodDropped", function(player: Player, foodId: string, position: Vector3)
+	Remote:On("FoodDropped", function(player: Player, foodId: string, position: Vector3, ownerId: number)
+		if ownerId ~= currentVisitingOwnerId then return end
 		log("Food dropped by", player.Name, ":", foodId)
 		self:AnimateFoodDrop(foodId, position)
 	end)
@@ -1101,9 +1431,12 @@ end
 --------------------------------------------------
 function PlotController:StartEnterSequence(owner: Player, plotModel: Model)
 	log("StartEnterSequence")
+	currentVisitingOwnerId = owner.UserId
 	setControlsEnabled(false)
 	MainHUD.SetHUDVisible(false)
 	isInteracting = true
+
+	GenerateUnderwaterAreaLocal()
 
 	Camera.CameraType = Enum.CameraType.Scriptable
 	local pivot = plotModel:GetPivot()
@@ -1119,8 +1452,8 @@ function PlotController:StartEnterSequence(owner: Player, plotModel: Model)
 	task.wait(0.6)
 
 	Camera.CFrame = CFrame.lookAt(
-		UNDERWATER_POS + Vector3.new(0, -5, 17), -- Zoom 17 (+1 dari 18) & Turun -5 (+1 dari -4)
-		UNDERWATER_POS + Vector3.new(0, -5, 0)
+		UNDERWATER_POS + Vector3.new(0, -7, 15), -- 🔧 ZOOM IN (+1) & TURUN (+1) LAGI
+		UNDERWATER_POS + Vector3.new(0, -7, 0)
 	)
 
 	local uwGui
@@ -1139,6 +1472,7 @@ end
 --------------------------------------------------
 function PlotController:StartExitSequence(plotModel: Model, loadingSg: ScreenGui, uwGui: ScreenGui)
 	log("StartExitSequence")
+	currentVisitingOwnerId = nil
 
 	local frame = loadingSg.Frame
 	local text = frame.TextLabel

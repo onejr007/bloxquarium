@@ -41,56 +41,110 @@
       }
     },
     "shop": {
-      "end": "2026-02-10T17:52:28Z",
+      "end": "2026-02-12T11:45:50Z",
       "item": {
-        "id_egg_1770632986": 8001,
-        "id_egg_1770633097": 623,
-        "id_egg_1770633225": 96,
-        "id_food_1770633722": 672397,
-        "id_food_1770633895": 364498,
-        "id_food_1770633942": 868361
+        "id_egg_1770632986": 5677,
+        "id_egg_1770633097": 378,
+        "id_egg_1770633225": 61,
+        "id_food_1770633722": 552134,
+        "id_food_1770633895": 807936,
+        "id_food_1770633942": 543484
       },
-      "start": "2026-02-10T17:42:28Z"
+      "start": "2026-02-12T11:35:50Z"
     }
   },
   "items": {
     "Egg": {
       "id_egg_1770632986": {
+        "mDropName": "Biasa",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
         "mInfoName": "Biasa",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
-        "mDropName": "id_egg_1770632986",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
         "name": "Telur Biasa",
         "price": 500,
-        "rarity": "common"
+        "rarity": "common",
+        "reward": {
+          "1":{
+            "fishId": "id_fish_1770634168",
+            "chance": 80
+          },
+          "2":{
+            "fishId": "id_fish_1770634169",
+            "chance": 20
+          }
+        }
       },
       "id_egg_1770633097": {
+        "mDropName": "Langka",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
         "mInfoName": "Langka",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
-        "mDropName": "id_egg_1770633097",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
         "name": "Telur Langka",
         "price": 500,
-        "rarity": "common"
+        "rarity": "common",
+        "reward": {
+          "1":{
+            "fishId": "id_fish_1770634168",
+            "chance": 80
+          },
+          "2":{
+            "fishId": "id_fish_1770634169",
+            "chance": 20
+          }
+        }
       },
       "id_egg_1770633225": {
+        "mDropName": "Epik",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
         "mInfoName": "Epik",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
-        "mDropName": "id_egg_1770633225",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
         "name": "Telur Epik",
         "price": 500,
-        "rarity": "common"
+        "rarity": "common",
+        "reward": {
+          "1":{
+            "fishId": "id_fish_1770634168",
+            "chance": 80
+          },
+          "2":{
+            "fishId": "id_fish_1770634169",
+            "chance": 20
+          }
+        }
       }
     },
     "Fish": {
       "id_fish_1770634168": {
+        "Adult": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 100,
+          "expGrowth": 100,
+          "mScale": 0.4,
+          "speed": 1.5
+        },
+        "Baby": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 0,
+          "expGrowth": 0,
+          "mScale": 0.4,
+          "speed": 2
+        },
+        "Senior": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 250,
+          "expGrowth": 1000,
+          "mScale": 0.4,
+          "speed": 1
+        },
         "buyAble": true,
         "desc": "Description",
         "exp": 10,
@@ -103,31 +157,46 @@
         "name": "Guppy",
         "price": 100,
         "rarity": "common",
-        "typeSwim": "normal",
-        "Baby": {
-          "speed": 2,
-          "expGrowth": 0,
-          "dropCD": 30,
-          "dropItem": "itemId",
-          "dropVal": 0,
-          "mScale": 0.4
-        },
+        "typeSwim": "normal"
+      },
+      "id_fish_1770634169": {
         "Adult": {
-          "speed": 1.5,
-          "expGrowth": 100,
           "dropCD": 30,
           "dropItem": "itemId",
           "dropVal": 100,
-          "mScale": 0.4
+          "expGrowth": 100,
+          "mScale": 0.4,
+          "speed": 1.5
         },
-        "Senior": { 
-          "speed": 1,
-          "expGrowth": 1000,
+        "Baby": {
+          "dropCD": 30,
+          "dropItem": "itemId",
+          "dropVal": 0,
+          "expGrowth": 0,
+          "mScale": 0.4,
+          "speed": 2
+        },
+        "Senior": {
           "dropCD": 30,
           "dropItem": "itemId",
           "dropVal": 250,
-          "mScale": 0.4
-        }
+          "expGrowth": 1000,
+          "mScale": 0.4,
+          "speed": 1
+        },
+        "buyAble": true,
+        "desc": "Description",
+        "exp": 10,
+        "mDropName": "Goldfish",
+        "mDropRotate": "0,0,0",
+        "mDropScale": 1,
+        "mInfoName": "Goldfish",
+        "mInfoRotate": "0,0,0",
+        "mInfoScale": 1,
+        "name": "Goldfish",
+        "price": 100,
+        "rarity": "common",
+        "typeSwim": "normal"
       }
     },
     "Food": {
@@ -137,7 +206,7 @@
         "desc": "Description",
         "mDropName": "Pellet1",
         "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropScale": 0.1,
         "mInfoName": "Pellet1",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
@@ -150,10 +219,10 @@
         "addHungerCD": 20,
         "desc": "Description",
         "mDropName": "Pill1",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropRotate": "90,0,0",
+        "mDropScale": 0.8,
         "mInfoName": "Pill1",
-        "mInfoRotate": "0,0,0",
+        "mInfoRotate": "90,0,0",
         "mInfoScale": 1,
         "name": "Pill",
         "price": 10,
@@ -164,8 +233,8 @@
         "addHungerCD": 20,
         "desc": "Description",
         "mDropName": "Pill2",
-        "mDropRotate": "0,0,0",
-        "mDropScale": 1,
+        "mDropRotate": "90,0,0",
+        "mDropScale": 0.08,
         "mInfoName": "Pill2",
         "mInfoRotate": "0,0,0",
         "mInfoScale": 1,
@@ -184,19 +253,19 @@
   "players": {
     "9002653829": {
       "AquariumLevel": 3,
-      "Coins": 0,
+      "Coins": 40464,
       "Gems": 0,
       "Inventory": {
         "Egg": {
-          "id_egg_1770632986": 6,
-          "id_egg_1770633097": 9
+          "id_egg_1770632986": 7,
+          "id_egg_1770633097": 9,
+          "id_egg_1770633225": 10
         },
         "Food": {
-          "id_food_1770633895": 15,
-          "id_food_1770633942": 3
+          "id_food_1770633722": 113
         }
       },
-      "LastSave": 1770745384,
+      "LastSave": 1770896613,
       "Level": 5,
       "XP": 0
     }

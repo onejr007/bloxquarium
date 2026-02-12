@@ -89,7 +89,7 @@ function InventoryService:HandleDropFood(player: Player, itemId: string, positio
 
     -- 4. Broadcast the drop to all clients in the area
     -- In this game, it seems everyone sees the same aquarium area when they enter.
-    RemoteService:FireAllClients("FoodDropped", player, itemId, position)
+    RemoteService:FireAllClients("FoodDropped", player.UserId, itemId, position)
 end
 
 return InventoryService
